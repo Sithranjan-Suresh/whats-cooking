@@ -95,7 +95,9 @@ def test_wrap_caption_limits():
 
 def test_normalize_script_rescales_beats():
     s = scripts.normalize_script(good_script(beats=[{"caption": "a", "seconds": 1}, {"caption": "b", "seconds": 1}]), 15)
-    assert abs(sum(b["seconds"] for b in s["beats"]) - 13.5) < 0.1
+    from app.services.gemini import END_CARD_S
+
+    assert abs(sum(b["seconds"] for b in s["beats"]) - (15 - END_CARD_S)) < 0.1
 
 
 # ---------------------------------------------------------------- insights

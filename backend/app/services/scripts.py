@@ -8,6 +8,7 @@ from typing import Optional
 
 from ..util import fmt_price, normalize_name
 from . import gemini
+from .gemini import END_CARD_S
 
 log = logging.getLogger("app.scripts")
 
@@ -101,7 +102,7 @@ def validate_script(script: dict, menu_row: dict, length_s: int, *, not_on_menu:
 
 def normalize_script(script: dict, length_s: int) -> dict:
     """Coerce shapes, wrap captions, fix timing, cap hashtags. Doesn't change meaning."""
-    main_len = length_s - 1.5
+    main_len = length_s - END_CARD_S
     beats = []
     for b in script.get("beats") or []:
         if not isinstance(b, dict) or not str(b.get("caption", "")).strip():
@@ -142,8 +143,10 @@ def normalize_script(script: dict, length_s: int) -> dict:
 
 def default_veo_prompt(visual_notes: str = "") -> str:
     base = (
-        "Subtle, realistic food cinematography of this exact dish: gentle steam rising, sauces glistening, "
-        "slow smooth camera push-in, soft warm restaurant lighting. No text, no people, no hands, keep the plate unchanged."
+        "Photorealistic commercial food cinematography of this exact dish in a busy, warm restaurant kitchen: "
+        "real motion and action such as steam billowing, sauce or garnish being spooned on by a chef's hands, oil sizzling, "
+        "a serving spoon lifting a portion, then a smooth cinematic push-in. Shallow depth of field, golden lighting. "
+        "Keep the dish recognisably the same. No faces, no text, no logos."
     )
     return base + (f" Details: {visual_notes}" if visual_notes else "")
 
@@ -183,7 +186,7 @@ def template_script(menu_row: dict, angle: Optional[str], restaurant_name: str, 
     price = None if not_on_menu else menu_row.get("price")
     desc = (menu_row.get("description") or "").rstrip(".")
     hook = ANGLE_HOOKS.get(angle, ANGLE_HOOKS[None])
-    main_len = length_s - 1.5
+    main_len = length_s - END_CARD_S
     beats = [hook, name if not not_on_menu else "Fresh from our kitchen"]
     if desc:
         short = desc if len(desc) <= 44 else desc[:41].rsplit(" ", 1)[0] + "…"

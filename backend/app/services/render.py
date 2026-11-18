@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import shutil
 from pathlib import Path
@@ -17,8 +18,8 @@ log = logging.getLogger("app.render")
 W, H, FPS = 720, 1280, 30
 SRC_W, SRC_H = 1440, 2560  # 2x oversample to keep zoompan smooth
 XFADE = 0.5
-END_CARD_S = 1.5
-END_XFADE = 0.25
+END_CARD_S = 2.8
+END_XFADE = 0.35
 
 STYLE_PRESETS = {
     "bold": {"size": 78, "outline": 5, "shadow": 2, "pop": True, "fade_in": 90, "fade_out": 60, "chars": 17, "kb": "dynamic"},
@@ -325,6 +326,169 @@ def render_end_card(
     return out
 
 
+# ------------------------------------------------------------------ animated end card
+
+def _ease_out_back(x: float) -> float:
+    c1, c3 = 1.70158, 2.70158
+    x = max(0.0, min(1.0, x))
+    return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2
+
+
+def _ease_out(x: float) -> float:
+    x = max(0.0, min(1.0, x))
+    return 1 - (1 - x) ** 3
+
+
+def _sparkle_sprite(r: int, color: tuple[int, int, int]) -> Image.Image:
+    from PIL import ImageFilter
+
+    size = r * 4
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.ellipse((size / 2 - r, size / 2 - r, size / 2 + r, size / 2 + r), fill=(*color, 255))
+    return im.filter(ImageFilter.GaussianBlur(r * 0.55))
+
+
+async def animated_end_card(
+    work: Path,
+    *,
+    restaurant_name: str,
+    dish_name: Optional[str],
+    price: Optional[str],
+    color_primary: str,
+    color_accent: str,
+    logo_path: Optional[Path],
+    seconds: float = END_CARD_S + END_XFADE,
+) -> Path:
+    """Logo reveal on a warm cream backdrop with drifting gold sparkles and a light sweep (≈3s, 30fps)."""
+    import random
+
+    rng = random.Random(restaurant_name)
+    frames_dir = work / "card_frames"
+    frames_dir.mkdir(exist_ok=True)
+    n = int(round(seconds * FPS))
+
+    # background: soft radial cream, very lightly tinted toward the brand color
+    pr = _hex_to_rgb(color_primary)
+    base = Image.new("RGB", (W, H), (247, 241, 231))
+    glow = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(glow).ellipse((-W * 0.4, H * 0.08, W * 1.4, H * 0.92), fill=255)
+    from PIL import ImageFilter
+
+    glow = glow.filter(ImageFilter.GaussianBlur(180))
+    edge = Image.new("RGB", (W, H), tuple(int(0.82 * c + 0.18 * p) for c, p in zip((226, 214, 196), pr)))
+    bg = Image.composite(base, edge, glow)
+
+    # sparkles: gold bokeh drifting upward, twinkling
+    gold, pale = (238, 192, 92), (255, 226, 160)
+    sprites = {r: _sparkle_sprite(r, gold if r <= 5 else pale) for r in (3, 5, 8, 12)}
+    parts = [
+        {
+            "x": rng.uniform(0, W), "y": rng.uniform(0, H), "r": rng.choice([3, 3, 5, 5, 8, 12]),
+            "vy": rng.uniform(18, 60), "vx": rng.uniform(-10, 10), "ph": rng.uniform(0, 6.28), "tw": rng.uniform(2.5, 6),
+        }
+        for _ in range(46)
+    ]
+
+    # logo (or wordmark) art
+    logo = None
+    if logo_path and Path(logo_path).exists():
+        try:
+            logo = Image.open(logo_path).convert("RGBA")
+            logo.thumbnail((440, 440), Image.LANCZOS)
+        except Exception:  # noqa: BLE001
+            logo = None
+    ink = (42, 29, 20)
+    name_font = _font("oswald", 92)
+    if logo is None:  # wordmark fallback
+        tmp = Image.new("RGBA", (W, 200), (0, 0, 0, 0))
+        d = ImageDraw.Draw(tmp)
+        txt = restaurant_name.upper()
+        f = name_font
+        while d.textlength(txt, font=f) > W - 120 and f.size > 40:
+            f = _font("oswald", f.size - 6)
+        bb = d.textbbox((0, 0), txt, font=f)
+        logo = Image.new("RGBA", (bb[2] - bb[0] + 20, bb[3] - bb[1] + 20), (0, 0, 0, 0))
+        ImageDraw.Draw(logo).text((10 - bb[0], 10 - bb[1]), txt, font=f, fill=(*pr, 255))
+    lw, lh = logo.size
+    logo_cy = int(H * 0.42)
+
+    # text layers
+    def text_layer(text: str, font, fill) -> Image.Image:
+        d0 = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bb = d0.textbbox((0, 0), text, font=font)
+        im = Image.new("RGBA", (bb[2] - bb[0] + 8, bb[3] - bb[1] + 8), (0, 0, 0, 0))
+        ImageDraw.Draw(im).text((4 - bb[0], 4 - bb[1]), text, font=font, fill=fill)
+        return im
+
+    layers = []
+    y = logo_cy + lh // 2 + 70
+    if dish_name:
+        f = _font("inter", 46)
+        while ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(dish_name, font=f) > W - 120 and f.size > 28:
+            f = _font("inter", f.size - 4)
+        t = text_layer(dish_name, f, (*ink, 255))
+        layers.append((t, y, 0.75))
+        y += t.height + 14
+    if price:
+        t = text_layer(price, _font("oswald", 76), (*pr, 255))
+        layers.append((t, y, 0.95))
+        y += t.height + 30
+    t = text_layer("ORDER TODAY", _font("inter", 28), (*ink, 200))
+    layers.append((t, max(y + 10, H - 230), 1.15))
+
+    shine_w = 170
+    for i in range(n):
+        t = i / FPS
+        frame = bg.copy().convert("RGBA")
+        for p in parts:
+            yy = (p["y"] - p["vy"] * t) % (H + 40) - 20
+            xx = p["x"] + p["vx"] * t + 8 * math.sin(t * 1.3 + p["ph"])
+            a = 0.35 + 0.65 * (0.5 + 0.5 * math.sin(t * p["tw"] + p["ph"]))
+            spr = sprites[p["r"]]
+            if a < 0.99:
+                spr = spr.copy()
+                spr.putalpha(spr.getchannel("A").point(lambda v, a=a: int(v * a)))
+            frame.alpha_composite(spr, (int(xx - spr.width / 2), int(yy - spr.height / 2)))
+        # logo pop with overshoot
+        k = _ease_out_back(t / 0.55)
+        alpha = _ease_out(t / 0.35)
+        if k > 0.02:
+            sw, shh = max(1, int(lw * (0.55 + 0.45 * k))), max(1, int(lh * (0.55 + 0.45 * k)))
+            lg = logo.resize((sw, shh), Image.LANCZOS)
+            # light sweep across the logo between 0.7s and 1.5s
+            st = (t - 0.7) / 0.8
+            if 0 <= st <= 1:
+                band = Image.new("L", lg.size, 0)
+                bx = int(-shine_w + st * (lg.width + 2 * shine_w))
+                ImageDraw.Draw(band).polygon([(bx, 0), (bx + shine_w * 0.6, 0), (bx + shine_w * 0.6 - lg.height * 0.4, lg.height), (bx - lg.height * 0.4, lg.height)], fill=150)
+                band = band.filter(ImageFilter.GaussianBlur(14))
+                white = Image.new("RGBA", lg.size, (255, 255, 255, 0))
+                white.putalpha(Image.composite(band, Image.new("L", lg.size, 0), lg.getchannel("A")))
+                lg = Image.alpha_composite(lg, white)
+            if alpha < 0.99:
+                lg.putalpha(lg.getchannel("A").point(lambda v, a=alpha: int(v * a)))
+            frame.alpha_composite(lg, ((W - sw) // 2, logo_cy - shh // 2))
+        for layer, ly, start in layers:
+            a = _ease_out((t - start) / 0.4)
+            if a <= 0:
+                continue
+            im = layer
+            if a < 0.99:
+                im = layer.copy()
+                im.putalpha(im.getchannel("A").point(lambda v, a=a: int(v * a)))
+            frame.alpha_composite(im, ((W - layer.width) // 2, int(ly + 18 * (1 - a))))
+        frame.convert("RGB").save(frames_dir / f"f{i:04d}.jpg", quality=90)
+
+    out = work / "endcard.mp4"
+    await ffmpeg(
+        ["-framerate", str(FPS), "-i", str(frames_dir / "f%04d.jpg"), "-c:v", "libx264", "-preset", "veryfast",
+         "-crf", "18", "-pix_fmt", "yuv420p", str(out)],
+    )
+    shutil.rmtree(frames_dir, ignore_errors=True)
+    return out
+
+
 # ------------------------------------------------------------------ assemble
 
 def _audio_graph(has_voice: bool, has_music: bool, total: float, tempo: float, safe: bool) -> tuple[str, str]:
@@ -377,14 +541,17 @@ async def assemble(
         room = main_len - 0.5
         if voice["duration_s"] > room:
             tempo = min(1.3, voice["duration_s"] / room)
-    inputs = ["-i", str(visuals), "-loop", "1", "-framerate", str(FPS), "-t", f"{END_CARD_S + END_XFADE:.3f}", "-i", str(end_card_png)]
+    if Path(end_card_png).suffix.lower() == ".mp4":  # animated end card
+        inputs = ["-i", str(visuals), "-i", str(end_card_png)]
+    else:
+        inputs = ["-i", str(visuals), "-loop", "1", "-framerate", str(FPS), "-t", f"{END_CARD_S + END_XFADE:.3f}", "-i", str(end_card_png)]
     if has_voice:
         inputs += ["-i", str(voice["path"])]
     if has_music:
         inputs += ["-stream_loop", "-1", "-i", str(music)]
     vf = (
         f"[0:v]setsar=1,format=yuv420p,trim=0:{main_len:.3f},setpts=PTS-STARTPTS,ass=captions.ass:fontsdir=fonts,fps=30,settb=AVTB[main];"
-        f"[1:v]scale={W}:{H},setsar=1,format=yuv420p,fps={FPS},settb=AVTB[card];"
+        f"[1:v]scale={W}:{H},setsar=1,format=yuv420p,fps={FPS},trim=0:{END_CARD_S + END_XFADE:.3f},setpts=PTS-STARTPTS,settb=AVTB[card];"
         f"[main][card]xfade=transition=fade:duration={END_XFADE}:offset={main_len - END_XFADE:.3f}[vout]"
     )
     af, alabel = _audio_graph(has_voice, has_music, total, tempo, safe)

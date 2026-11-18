@@ -43,7 +43,7 @@ async def generate_clip(photo: Path, mime: str, prompt: str, out_path: Path, *, 
         duration_seconds=seconds,
         resolution="720p",
         number_of_videos=1,
-        negative_prompt="text, captions, watermark, people, hands, faces, distorted food",
+        negative_prompt="text, captions, watermark, logos, faces, distorted food, extra limbs",
     )
     t0 = time.monotonic()
     try:

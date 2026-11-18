@@ -66,16 +66,17 @@ async def render_free(session: Session, r: Restaurant, item: MenuItem, out: Path
     row = scripts.menu_row_for(item)
     script = scripts.template_script(row, angle, r.name, 15)
     script["source"] = "template"
-    visuals = await render.kenburns(photo, 13.5, work)
+    main_len = 15 - render.END_CARD_S
+    visuals = await render.kenburns(photo, main_len, work)
     voice = await tts.synthesize(script["voiceover"], r.tts_voice, work / "voice.mp3", tone=r.voice_tone)
     speech = (voice["timings"][0]["start"] + 0.3, voice["timings"][-1]["end"] + 0.3) if voice and voice.get("timings") else None
-    ass = render.build_ass(script, 13.5, color_primary=r.color_primary, color_accent=r.color_accent, speech=speech)
+    ass = render.build_ass(script, main_len, color_primary=r.color_primary, color_accent=r.color_accent, speech=speech)
     logo = session.get(Asset, r.logo_asset_id) if r.logo_asset_id else None
-    card = render.render_end_card(work / "card.jpg", restaurant_name=r.name, dish_name=item.name, price=row["price"],
+    card = await render.animated_end_card(work, restaurant_name=r.name, dish_name=item.name, price=row["price"],
                                   color_primary=r.color_primary, color_accent=r.color_accent,
                                   logo_path=Path(logo.path) if logo else None)
     music = session.exec(select(Asset).where(Asset.restaurant_id == r.id, Asset.kind == "music")).first()
-    await render.assemble_with_retry(work=work, visuals=visuals, main_len=13.5, ass_text=ass, end_card_png=card,
+    await render.assemble_with_retry(work=work, visuals=visuals, main_len=main_len, ass_text=ass, end_card_png=card,
                                      voice=voice, music=Path(music.path) if music else None, out_path=out)
     poster = out.with_suffix(".jpg")
     await render.extract_poster(out, poster)

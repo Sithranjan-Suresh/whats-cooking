@@ -439,8 +439,8 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
         speech = (voice["timings"][0]["start"] + 0.3, voice["timings"][-1]["end"] + 0.3)
     ass = render.build_ass(ctx.script, main_len, color_primary=ctx.restaurant["color_primary"],
                            color_accent=ctx.restaurant["color_accent"], style=ctx.style, speech=speech)
-    card = render.render_end_card(
-        ctx.work / "endcard.jpg", restaurant_name=ctx.restaurant["name"],
+    card = await render.animated_end_card(
+        ctx.work, restaurant_name=ctx.restaurant["name"],
         dish_name=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("name"),
         price=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("price"),
         color_primary=ctx.restaurant["color_primary"], color_accent=ctx.restaurant["color_accent"],
