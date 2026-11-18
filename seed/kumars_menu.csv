@@ -1,0 +1,21 @@
+name,price,description,category
+Chicken Biryani,14.99,"Fragrant basmati rice layered with slow-cooked chicken, saffron and crispy fried onions",Mains
+Butter Chicken,15.99,"Tandoori chicken simmered in a creamy tomato and butter sauce",Mains
+Chicken Tikka Masala,15.49,"Charred chicken tikka in a spiced onion and tomato masala",Mains
+Lamb Rogan Josh,17.99,"Tender lamb braised in a Kashmiri chili and yogurt gravy",Mains
+Goat Biryani,16.99,"Bone-in goat and basmati rice cooked dum-style with mint and saffron",Mains
+Palak Paneer,13.49,"Cottage cheese cubes in a smooth spiced spinach sauce",Mains
+Malai Kofta,13.99,"Paneer and potato dumplings in a rich cashew cream sauce",Mains
+Chana Masala,11.99,"Chickpeas cooked with onions, tomatoes and warm spices",Mains
+Dal Makhani,12.49,"Black lentils slow-cooked overnight with butter and cream",Mains
+Tandoori Chicken,14.49,"Chicken marinated in yogurt and spices, roasted in the tandoor",Tandoor
+Chicken 65,9.99,"Crispy fried chicken bites tossed with curry leaves and red chili",Starters
+Vegetable Samosa,5.99,"Two crisp pastries filled with spiced potatoes and peas",Starters
+Onion Bhaji,5.49,"Crispy onion fritters in a chickpea flour batter",Starters
+Garlic Naan,3.49,"Tandoor-baked flatbread brushed with garlic butter and cilantro",Breads
+Butter Naan,2.99,"Soft tandoor-baked flatbread brushed with butter",Breads
+Tandoori Roti,2.49,"Whole wheat flatbread baked in the tandoor",Breads
+Mango Lassi,4.49,"Chilled yogurt drink blended with ripe mango",Drinks
+Masala Chai,2.99,"Black tea brewed with milk, ginger and cardamom",Drinks
+Gulab Jamun,4.99,"Warm milk dumplings soaked in rose and cardamom syrup",Desserts
+Chef's Thali,,"A daily selection of curries, rice, bread and dessert",Specials

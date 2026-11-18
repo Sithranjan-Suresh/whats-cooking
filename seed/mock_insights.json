@@ -1,0 +1,57 @@
+{
+ "batch_id": "346ad79fb438",
+ "cards": [
+  {
+   "id": 2,
+   "angle": "rising",
+   "menu_item": {
+    "id": 1,
+    "name": "Chicken Biryani",
+    "price": "$14.99",
+    "photo_url": "http://localhost:8000/media/assets/seed_photo_chicken-biryani.jpg"
+   },
+   "metric": {
+    "qty_7d": 83,
+    "qty_prev_7d": 63,
+    "wow_pct": 32
+   },
+   "metric_label": "+32% WoW \u00b7 83 sold",
+   "reason": "Chicken Biryani is up 32% vs last week with 83 sold. Ride the momentum.",
+   "reason_source": "rule"
+  },
+  {
+   "id": 1,
+   "angle": "top_seller",
+   "menu_item": {
+    "id": 2,
+    "name": "Butter Chicken",
+    "price": "$15.99",
+    "photo_url": "http://localhost:8000/media/assets/seed_photo_butter-chicken.jpg"
+   },
+   "metric": {
+    "qty_7d": 112,
+    "qty_14d": 219
+   },
+   "metric_label": "#1 this week \u00b7 112 sold",
+   "reason": "Butter Chicken is your best seller this week with 112 sold. Show people what everyone orders.",
+   "reason_source": "rule"
+  },
+  {
+   "id": 3,
+   "angle": "slow_mover",
+   "menu_item": {
+    "id": 7,
+    "name": "Malai Kofta",
+    "price": "$13.99",
+    "photo_url": "http://localhost:8000/media/assets/seed_photo_malai-kofta.jpg"
+   },
+   "metric": {
+    "qty_7d": 5,
+    "qty_14d": 10
+   },
+   "metric_label": "10 sold in 14 days",
+   "reason": "Only 10 Malai Kofta sold in the last 14 days. A video can introduce it to new guests.",
+   "reason_source": "rule"
+  }
+ ]
+}
