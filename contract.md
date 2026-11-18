@@ -14,7 +14,7 @@ Serializers: `backend/app/serializers.py`. Change this file deliberately and pre
   ```
   Common codes: `validation_error` (422), `not_found` (404), `demo_mode` (403), `bad_owner_token` (401),
   `file_too_large` (413), `bad_mime` / `bad_image` (415), `bad_csv` (400), `photo_required` (400),
-  `youtube_not_connected` (409), `rate_limited` (429, retryable), `internal_error` (500, retryable).
+  `youtube_not_connected` (409), `budget_cap_reached` (402), `rate_limited` (429, retryable), `internal_error` (500, retryable).
 
 ## Auth
 
@@ -39,12 +39,13 @@ The frontend stores the owner token in `localStorage` after a one-time unlock in
 | GET `/menu` | any | — | `MenuItem[]` |
 | POST `/uploads` | any (logo: owner) | multipart `file`, `kind` = `photo`\|`logo` | `{asset_id, url, width, height}`. Rejects > 10 MB (413) or non JPG/PNG/WEBP (415). Photos are EXIF-rotated and stored as JPEG |
 | POST `/menu/{id}/photo` | owner | `{asset_id}` | `MenuItem` |
+| POST `/dishes` | owner | `{name, price?: "11.50", description?, photo_asset_id}` | `MenuItem` (upsert by name; the quick-take dashboard uses this, then `POST /jobs` with `mode:"menu"`) |
 | POST `/sales/import` | owner | multipart `file` (CSV) | `{rows, dropped, date_from, date_to, days, unmatched_items:[str]}`. **Replaces** previous sales and recomputes insights |
 | GET `/sales/summary` | any | — | `{rows, date_from, date_to, days?, unmatched_items}` |
 | GET `/insights` | any | — | `{batch_id, cards: InsightCard[]}` (computed on first call if sales exist) |
 | POST `/insights/refresh` | owner | — | same as GET |
 | GET `/insights/{id}` | any | — | `InsightCard` |
-| POST `/jobs` | any | `{mode:"photo"\|"insight"\|"menu", photo_asset_id?, menu_item_id?, insight_id?, style:"bold"\|"warm"\|"minimal", length_s:15\|30, veo:bool}` | **202** `{job_id}` |
+| POST `/jobs` | any | `{mode:"photo"\|"insight"\|"menu", photo_asset_id?, menu_item_id?, insight_id?, style:"bold"\|"warm"\|"minimal", length_s:8\|15\|30 (default 8), veo:bool}` | **202** `{job_id}`. **402 `budget_cap_reached`** if `veo:true` would exceed the daily limit or monthly cap (message says how much is left) |
 | GET `/jobs` | any | `?status=active` → queued/running/needs_dish only | `Job[]` (newest first, max 30) |
 | GET `/jobs/{id}` | any | — | `Job` |
 | POST `/jobs/{id}/confirm-dish` | any | `{menu_item_id: int \| null, continue_anyway?: bool}` | `{ok:true}`. Resumes a `needs_dish` job. `null` = "Not on menu" (script omits price) |
@@ -97,7 +98,7 @@ Video { id, job_id, url, poster_url, dish, menu_item_id, duration_s, width, heig
         title, description, hashtags, youtube_id|null, youtube_url|null, youtube_privacy|null,
         publish_status:"draft"|"publishing"|"published"|"failed", publish_error|null, publish_progress, created_at }
 
-Usage { today:{clips, limit}, month:{est_cents, cap_cents}, cost_per_sec_cents, free_mode,
+Usage { today:{clips, limit}, month:{est_cents, cap_cents}, cost_per_sec_cents, audio_cost_per_sec_cents, free_mode,
         veo:{allowed, reason|null, message|null, est_cents} }   // veo = what would happen if this viewer asked for Veo now
 
 Settings { restaurant_id, daily_veo_clip_limit, monthly_cap_cents, free_mode, veo_cost_per_sec_cents }
