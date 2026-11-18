@@ -8,7 +8,9 @@ import { ANGLE_HINT, ANGLE_LABEL, cx, money } from "@/lib/format";
 import type { InsightCard, InsightsResponse, MenuItem, Style } from "@/lib/types";
 import { useIsOwner, useJob, useUsage } from "@/hooks/data";
 import { Badge, Button, Card, ErrorCallout, SectionTitle, Skeleton, Toggle, useToast } from "@/components/ui";
-import { DishPickerModal, EditCaptionsModal, MenuPicker, PhonePlayer, PhotoDrop, ScriptPanel, StageStepper, validatePhoto } from "@/components/studio";
+import { DishPickerModal, EditCaptionsModal, MenuPicker, PhotoDrop, validatePhoto } from "@/components/studio";
+import { GenerateButton, PlayerStage, ScriptSheet, StageBoard } from "@/components/themed/studio";
+import { useTheme } from "@/lib/theme";
 
 type Source = "photo" | "insight" | "menu";
 const LAST_JOB = "wc_last_job";
@@ -26,6 +28,7 @@ function Studio() {
   const router = useRouter();
   const toast = useToast();
   const owner = useIsOwner();
+  const { t, theme } = useTheme();
   const usage = useUsage();
   const menuQ = useSWR<MenuItem[], ApiError>("/menu", fetcher);
   const menu = menuQ.data ?? [];
@@ -80,6 +83,8 @@ function Studio() {
 
   const { job, error: jobError, refresh } = useJob(jobId);
   const busy = !!job && ["queued", "running"].includes(job.status);
+  const restaurantQ = useSWR<{ name: string }, ApiError>("/restaurants/me", fetcher);
+  const restaurantName = restaurantQ.data?.name;
 
   // Toast + usage refresh when a job finishes.
   const [notified, setNotified] = useState<number | null>(null);
@@ -87,14 +92,14 @@ function Studio() {
     if (!job || notified === job.id) return;
     if (job.status === "done") {
       setNotified(job.id);
-      toast("Your Short is ready", "ok");
+      toast(t.toast.done, "ok");
       usage.mutate();
     } else if (job.status === "failed") {
       setNotified(job.id);
-      toast(job.error || "Render failed", "bad");
+      toast(job.error || t.toast.failed, "bad");
       usage.mutate();
     }
-  }, [job, notified, toast, usage]);
+  }, [job, notified, toast, usage, t]);
 
   const veoInfo = usage.data?.veo;
   const veoAllowed = !!veoInfo?.allowed;
@@ -200,18 +205,19 @@ function Studio() {
   return (
     <div>
       <SectionTitle
-        title="Studio"
-        sub="One dish in, one finished Short out."
+        title={t.studio.title}
+        eyebrow={t.studio.eyebrow}
+        sub={t.studio.sub}
         right={
           showResult && !busy ? (
             <Button variant="ghost" onClick={newVideo}>
-              + New video
+              + {t.studio.again}
             </Button>
           ) : null
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_370px]">
         <div className="space-y-6">
           {!showResult && (
             <Card className="p-5">
@@ -219,9 +225,9 @@ function Studio() {
               <div role="tablist" aria-label="Start from" className="mb-5 grid grid-cols-3 gap-1 rounded-xl bg-bg p-1">
                 {(
                   [
-                    ["photo", "Photo"],
-                    ["insight", "From insight"],
-                    ["menu", "From menu"],
+                    ["photo", t.studio.tabs.photo],
+                    ["insight", t.studio.tabs.insight],
+                    ["menu", t.studio.tabs.menu],
                   ] as [Source, string][]
                 ).map(([k, label]) => (
                   <button
@@ -333,16 +339,16 @@ function Studio() {
               <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-line bg-bg/40 px-4 py-3">
                 <div className="min-w-0">
                   <label htmlFor="veo" className="text-sm font-semibold text-cream">
-                    AI motion (Veo){" "}
+                    {t.studio.veo}{" "}
                     {veoInfo && <span className="font-mono text-gold">≈ {money(veoInfo.est_cents)}</span>}
                   </label>
                   <div className="text-xs text-muted">
                     {veoAllowed
-                      ? "Turns the still photo into 8s of real motion. Falls back to free mode automatically."
+                      ? t.studio.veoOn
                       : veoInfo?.message || "Loading budget…"}
                   </div>
                 </div>
-                <Toggle id="veo" label="AI motion (Veo)" checked={veo} onChange={setVeo} disabled={!veoAllowed} />
+                <Toggle id="veo" label={t.studio.veo} checked={veo} onChange={setVeo} disabled={!veoAllowed} />
               </div>
 
               {createError && (
@@ -351,9 +357,7 @@ function Studio() {
                 </div>
               )}
 
-              <Button className="mt-5 w-full text-base" onClick={generate} disabled={!ready} loading={creating}>
-                Generate Short
-              </Button>
+              <GenerateButton onClick={generate} disabled={!ready} loading={creating} />
               {!ready && (
                 <p className="mt-2 text-center text-xs text-muted">
                   {source === "photo" ? "Add a dish photo to start." : source === "insight" ? (insight ? "Add a photo for this dish." : "Pick an insight.") : menuItem ? "Add a photo for this dish." : "Pick a dish."}
@@ -373,11 +377,11 @@ function Studio() {
                   <>
                     {job.menu_item && (
                       <div className="mb-4 flex items-center gap-2">
-                        <span className="text-lg font-semibold text-cream">{job.menu_item.name}</span>
+                        <span className={cx("text-cream", theme === "studio" ? "font-display text-[30px] uppercase tracking-[.04em]" : "font-display text-2xl")}>{job.menu_item.name}</span>
                         {job.angle && <Badge tone="gold">{ANGLE_LABEL[job.angle]}</Badge>}
                       </div>
                     )}
-                    <StageStepper job={job} />
+                    <StageBoard job={job} />
                     {job.status === "failed" && (
                       <div className="mt-4">
                         <ErrorCallout error={job.error || "Render failed."} title={`Failed at ${job.error_stage ?? "a stage"}`} onRetry={retry} />
@@ -389,7 +393,7 @@ function Studio() {
                 )}
               </div>
               <div className="md:border-l md:border-line md:pl-6">
-                <ScriptPanel script={job?.script ?? null} loading={busy} />
+                <ScriptSheet script={job?.script ?? null} loading={busy} restaurant={restaurantName} />
               </div>
             </Card>
           )}
@@ -397,27 +401,12 @@ function Studio() {
 
         {/* Player column */}
         <div className={cx("lg:sticky lg:top-8 lg:self-start", showResult && "order-first lg:order-none")}>
-          <PhonePlayer
-            src={job?.status === "done" ? job.video?.url : null}
-            poster={job?.video?.poster_url}
-            placeholder={job?.photo_url ?? previewImg}
-            overlay={
-              job && busy ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 bg-black/40 p-6 text-center">
-                  <div className="h-10 w-10 animate-spin rounded-full border-4 border-gold/30 border-t-gold motion-reduce:animate-none" />
-                  <div className="font-display text-xl uppercase tracking-wide text-cream">Cooking…</div>
-                  <div className="text-xs text-cream/80">{job.stages.find((s) => s.status === "running")?.note || "Working on it"}</div>
-                </div>
-              ) : !job && !previewImg ? (
-                <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted">Your Short plays here</div>
-              ) : null
-            }
-          />
+          <PlayerStage job={job} previewImg={previewImg} busy={busy} />
           {job?.status === "done" && job.video && (
-            <div className="mx-auto mt-4 max-w-[300px] space-y-2">
+            <div className="mx-auto mt-4 max-w-[320px] space-y-2">
               <div className="flex items-center justify-center gap-2 text-xs text-muted">
-                <Badge tone={job.veo_used ? "gold" : "neutral"}>{job.veo_used ? "Veo" : "Free"}</Badge>
-                <span className="font-mono">{money(job.cost_cents)}</span>
+                <Badge tone={job.veo_used ? "gold" : "neutral"}>{job.veo_used ? "Veo" : theme === "studio" ? "Free rig" : "Free"}</Badge>
+                <span className="font-mono">{theme === "studio" ? `Cost to make: ${money(job.cost_cents)}` : `On the bill: ${money(job.cost_cents)}`}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <a
@@ -433,8 +422,8 @@ function Studio() {
                 >
                   Edit captions &amp; re-render
                 </button>
-                <Link href={`/library?video=${job.video.id}`} className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gold text-sm font-semibold text-bg hover:bg-gold2">
-                  {owner ? "Publish →" : "Library →"}
+                <Link href={`/library?video=${job.video.id}`} className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gold text-sm font-semibold text-ongold hover:bg-gold2">
+                  {owner ? (theme === "studio" ? "Premiere →" : "Run it →") : `${t.nav.library} →`}
                 </Link>
               </div>
             </div>

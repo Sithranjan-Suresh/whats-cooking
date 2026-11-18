@@ -2,34 +2,172 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ============================================================
+   THEME TOKENS
+   studio  = "Every dish is a star": velvet black, curtain red, marquee-bulb amber
+   kitchen = "Order up!": charcoal tile line, stainless steel, heat-lamp orange, ticket paper
+   ============================================================ */
+
+:root,
+[data-theme="studio"] {
+  --bg: 11 7 8;          /* velvet black  #0B0708 */
+  --panel: 22 14 16;     /* box seat      #160E10 */
+  --panel2: 33 20 23;    /*               #211417 */
+  --line: 56 36 40;      /*               #382428 */
+  --gold: 245 185 66;    /* marquee bulb  #F5B942 */
+  --gold2: 255 213 128;
+  --cream: 246 239 228;  /* screen white  #F6EFE4 */
+  --muted: 166 148 140;
+  --ember: 150 16 32;    /* curtain red   #961020 */
+  --ok: 134 214 146;
+  --bad: 255 96 82;
+  --ongold: 22 10 8;
+  --paper: 246 239 228;
+  --ink: 22 10 8;
+  --chalk: 22 14 16;
+  --radius: 14px;
+  --font-display: var(--f-bebas);
+  --font-body: var(--f-archivo);
+  --font-mono: var(--f-courier);
+  --font-hand: var(--f-courier);
+  color-scheme: dark;
+}
+
+[data-theme="kitchen"] {
+  --bg: 20 22 22;        /* charcoal tile #141616 */
+  --panel: 32 35 37;     /* steel         #202325 */
+  --panel2: 42 46 48;
+  --line: 66 71 74;
+  --gold: 255 138 61;    /* heat lamp     #FF8A3D */
+  --gold2: 255 172 112;
+  --cream: 244 240 232;
+  --muted: 156 160 160;
+  --ember: 217 58 43;    /* tomato        #D93A2B */
+  --ok: 128 205 120;
+  --bad: 255 99 80;
+  --ongold: 26 14 6;
+  --paper: 251 248 241;  /* ticket paper  #FBF8F1 */
+  --ink: 28 27 25;
+  --chalk: 30 41 37;     /* chalkboard    #1E2925 */
+  --radius: 6px;
+  --font-display: var(--f-alfa);
+  --font-body: var(--f-archivo);
+  --font-mono: var(--f-plex);
+  --font-hand: var(--f-caveat);
   color-scheme: dark;
 }
 
 html,
 body {
-  background: #0f1a14;
-  color: #f3ebdd;
+  background: rgb(var(--bg));
+  color: rgb(var(--cream));
 }
-
 body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
-
 ::selection {
-  background: rgba(196, 154, 74, 0.35);
+  background: rgb(var(--gold) / 0.35);
 }
-
 *:focus-visible {
-  outline: 2px solid #c49a4a;
+  outline: 2px solid rgb(var(--gold));
   outline-offset: 2px;
 }
 
-/* subtle grain so the dark panels don't look flat */
-.grain {
-  background-image: radial-gradient(rgba(243, 235, 221, 0.035) 1px, transparent 1px);
-  background-size: 3px 3px;
+/* ============================================================
+   ATMOSPHERE
+   ============================================================ */
+
+/* Studio: velvet backdrop + projector vignette */
+[data-theme="studio"] body {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% -10%, rgb(var(--ember) / 0.22), transparent 65%),
+    radial-gradient(ellipse 120% 90% at 50% 120%, rgb(0 0 0 / 0.9), transparent 60%),
+    rgb(var(--bg));
+  background-attachment: fixed;
+}
+
+/* animated film grain (fixed overlay) */
+.grain-layer {
+  pointer-events: none;
+  position: fixed;
+  inset: -50%;
+  z-index: 70;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: grain 0.9s steps(4) infinite;
+  mix-blend-mode: overlay;
+}
+
+/* velvet curtain folds */
+.velvet {
+  background:
+    repeating-linear-gradient(90deg, rgb(0 0 0 / 0.38) 0 6px, rgb(255 255 255 / 0.04) 14px, rgb(0 0 0 / 0.32) 26px, rgb(0 0 0 / 0.5) 34px),
+    linear-gradient(180deg, #b0182a 0%, #7d0c19 55%, #4a0610 100%);
+}
+
+/* Kitchen: subway-tile wall */
+[data-theme="kitchen"] body {
+  background-color: rgb(var(--bg));
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 72px 36px, 72px 36px, 72px 36px;
+  background-position: 0 0, 0 0, 36px 18px;
+  background-attachment: fixed;
+}
+
+/* brushed steel */
+.steel {
+  background:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #3a3f42 0%, #2a2e30 50%, #232628 100%);
+}
+
+/* chalkboard */
+.chalkboard {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgb(255 255 255 / 0.06), transparent 60%),
+    radial-gradient(ellipse at 80% 90%, rgb(255 255 255 / 0.04), transparent 50%),
+    rgb(var(--chalk));
+  box-shadow: inset 0 0 0 10px #4a3322, inset 0 0 0 12px #2e1f14, inset 0 0 60px rgb(0 0 0 / 0.55);
+}
+.chalk-text {
+  color: rgb(250 248 240 / 0.92);
+  text-shadow: 0 0 1px rgb(255 255 255 / 0.5), 1px 1px 0 rgb(255 255 255 / 0.08);
+}
+
+/* ticket paper with torn / zigzag bottom edge */
+.ticket {
+  background: rgb(var(--paper));
+  color: rgb(var(--ink));
+  position: relative;
+}
+.ticket-zigzag {
+  --zz: 9px;
+  -webkit-mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--zz)) 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / calc(2 * var(--zz)) 100%;
+  padding-bottom: calc(var(--zz) + 10px);
+}
+
+/* heat lamp glow from above */
+.heatlamp {
+  background: radial-gradient(ellipse 70% 60% at 50% -10%, rgb(var(--gold) / 0.35), transparent 70%);
+}
+
+/* marquee bulbs (studio) */
+.bulb {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: rgb(var(--gold2));
+  box-shadow: 0 0 6px 2px rgb(var(--gold) / 0.85), 0 0 14px 4px rgb(var(--gold) / 0.35);
+}
+.bulb.off {
+  background: rgb(80 55 30);
+  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -39,6 +177,9 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  .grain-layer {
+    display: none;
   }
 }
 
@@ -53,6 +194,32 @@ input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 input[type="color"]::-webkit-color-swatch {
-  border: 1px solid #2a3a2f;
+  border: 1px solid rgb(var(--line));
   border-radius: 10px;
+}
+
+/* themed card surfaces */
+[data-theme="studio"] .card {
+  background: linear-gradient(180deg, rgb(var(--panel2) / 0.9), rgb(var(--panel) / 0.92));
+  border-color: rgb(var(--line) / 0.8);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 30px 60px -40px rgb(0 0 0 / 0.9);
+}
+[data-theme="kitchen"] .card {
+  background:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.022) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #34393c 0%, #282c2e 100%);
+  border: 1px solid rgb(0 0 0 / 0.55);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 10px 24px -14px rgb(0 0 0 / 0.9);
+}
+
+/* moving spotlight on the lead headshot */
+.spotlight {
+  background: radial-gradient(circle at 50% 32%, rgb(255 240 200 / 0.4), transparent 38%);
+  background-size: 220% 100%;
+  mix-blend-mode: screen;
+  animation: spot 6s ease-in-out infinite;
+}
+@keyframes spot {
+  0%, 100% { background-position: 0% 0; }
+  50% { background-position: 100% 0; }
 }

@@ -1,11 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { defaultTheme, themeBootScript } from "@/lib/theme-boot";
 import "./globals.css";
 
 // Bundled (SIL OFL) so builds never depend on fetching Google Fonts.
-const oswald = localFont({ src: "./fonts/oswald.woff2", weight: "200 700", variable: "--font-oswald", display: "swap" });
-const inter = localFont({ src: "./fonts/inter.woff2", weight: "100 900", variable: "--font-inter", display: "swap" });
-const mono = localFont({ src: "./fonts/jetbrains-mono.woff2", weight: "100 800", variable: "--font-mono", display: "swap" });
+const bebas = localFont({ src: "./fonts/bebas-neue.woff2", weight: "400", variable: "--f-bebas", display: "swap" });
+const courier = localFont({
+  src: [
+    { path: "./fonts/courier-prime-400.woff2", weight: "400" },
+    { path: "./fonts/courier-prime-700.woff2", weight: "700" },
+  ],
+  variable: "--f-courier",
+  display: "swap",
+});
+const alfa = localFont({ src: "./fonts/alfa-slab-one.woff2", weight: "400", variable: "--f-alfa", display: "swap" });
+const caveat = localFont({ src: "./fonts/caveat.woff2", weight: "400 700", variable: "--f-caveat", display: "swap" });
+const plex = localFont({
+  src: [
+    { path: "./fonts/plex-mono-400.woff2", weight: "400" },
+    { path: "./fonts/plex-mono-600.woff2", weight: "600" },
+  ],
+  variable: "--f-plex",
+  display: "swap",
+});
+const archivo = localFont({ src: "./fonts/archivo.woff2", weight: "100 900", variable: "--f-archivo", display: "swap" });
 
 export const metadata: Metadata = {
   title: "What's Cooking?",
@@ -19,15 +37,19 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0F1A14",
+  themeColor: "#0B0708",
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const fonts = [bebas, courier, alfa, caveat, plex, archivo].map((f) => f.variable).join(" ");
   return (
-    <html lang="en" className={`${oswald.variable} ${inter.variable} ${mono.variable}`}>
-      <body className="min-h-screen bg-bg font-sans text-cream">{children}</body>
+    <html lang="en" data-theme={defaultTheme()} className={fonts} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript(defaultTheme()) }} />
+      </head>
+      <body className="min-h-screen font-sans">{children}</body>
     </html>
   );
 }

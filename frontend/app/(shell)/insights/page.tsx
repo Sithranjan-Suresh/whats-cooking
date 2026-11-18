@@ -6,10 +6,13 @@ import { api, fetcher, ApiError } from "@/lib/api";
 import { ANGLE_HINT, ANGLE_LABEL, cx, shortDate } from "@/lib/format";
 import type { InsightCard, InsightsResponse, MenuItem, SalesImportResult, SalesSummary } from "@/lib/types";
 import { useIsOwner } from "@/hooks/data";
+import { useTheme } from "@/lib/theme";
+import { InsightBoard } from "@/components/themed/insights";
 import { Badge, Button, Card, EmptyState, ErrorCallout, inputCls, SectionTitle, Skeleton, useToast } from "@/components/ui";
 
 export default function InsightsPage() {
   const owner = useIsOwner();
+  const { t } = useTheme();
   const ins = useSWR<InsightsResponse, ApiError>("/insights", fetcher);
   const summary = useSWR<SalesSummary, ApiError>("/sales/summary", fetcher);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,20 +34,17 @@ export default function InsightsPage() {
   return (
     <div>
       <SectionTitle
-        title="Insights"
+        title={t.insights.title}
+        eyebrow={t.insights.eyebrow}
         sub={
-          s && s.rows > 0 ? (
-            <>
-              What to promote this week, from <b className="text-cream">{s.rows.toLocaleString()}</b> sales rows · {shortDate(s.date_from!)} – {shortDate(s.date_to!)}
-            </>
-          ) : (
-            "Upload your sales export and we'll tell you which dish to promote."
-          )
+          s && s.rows > 0
+            ? t.insights.sub(s.rows.toLocaleString(), `${shortDate(s.date_from!)} – ${shortDate(s.date_to!)}`)
+            : "Upload your sales export and we'll tell you which dish to promote."
         }
         right={
           owner && s && s.rows > 0 ? (
             <Button variant="ghost" onClick={refresh} loading={refreshing}>
-              Refresh picks
+              {t.insights.refresh}
             </Button>
           ) : null
         }
@@ -63,7 +63,7 @@ export default function InsightsPage() {
       {ins.data && ins.data.cards.length === 0 && (
         <EmptyState
           icon={<span className="text-4xl">📈</span>}
-          title="No sales data yet"
+          title={t.insights.empty}
           body={
             <>
               Export item sales from Toast, Square or Clover as CSV (<code className="font-mono text-cream">date, item_name, quantity, revenue</code>) and upload it below.
@@ -78,18 +78,14 @@ export default function InsightsPage() {
       )}
 
       {ins.data && ins.data.cards.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {ins.data.cards.map((c, i) => (
-            <InsightCardView key={c.id} card={c} highlight={i === 0 && c.angle === "rising"} delay={i * 80} />
-          ))}
-        </div>
+        <InsightBoard cards={ins.data.cards} />
       )}
 
       {ins.data && ins.data.cards.length > 0 && ins.data.cards.length < 3 && (
         <p className="mt-3 text-sm text-muted">Only the top seller is shown. Rising and slow-mover picks need at least 14 days of sales data.</p>
       )}
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-12 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         {owner ? (
           <SalesUpload onDone={() => {
             ins.mutate();
@@ -124,46 +120,6 @@ export default function InsightsPage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function InsightCardView({ card, highlight }: { card: InsightCard; highlight: boolean; delay?: number }) {
-  const big = card.angle === "rising" ? `+${card.metric.wow_pct ?? 0}%` : card.angle === "top_seller" ? `${card.metric.qty_7d ?? 0}` : `${card.metric.qty_14d ?? 0}`;
-  const unit = card.angle === "rising" ? "vs last week" : card.angle === "top_seller" ? "sold this week" : "sold in 14 days";
-  return (
-    <Card as="article" className={cx("flex animate-fadeup flex-col overflow-hidden", highlight && "animate-pulsegold border-gold/60")}>
-      <div className="relative aspect-[4/3] bg-bg">
-        {card.menu_item.photo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={card.menu_item.photo_url} alt={card.menu_item.name} loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <div className="grid h-full place-items-center text-sm text-muted">No photo yet</div>
-        )}
-        <div className="absolute left-3 top-3">
-          <Badge tone={card.angle === "slow_mover" ? "info" : "gold"} className="bg-bg/80 backdrop-blur">
-            {ANGLE_LABEL[card.angle]}
-          </Badge>
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col p-5">
-        <h2 className="text-lg font-semibold text-cream">{card.menu_item.name}</h2>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className={cx("font-display text-4xl", card.angle === "slow_mover" ? "text-cream" : "text-gold")}>{big}</span>
-          <span className="text-sm text-muted">{unit}</span>
-        </div>
-        <div className="mt-1 font-mono text-xs text-muted">{card.metric_label}</div>
-        <p className="mt-3 flex-1 text-sm leading-relaxed text-cream/90">{card.reason}</p>
-        <div className="mt-2 text-[11px] uppercase tracking-wider text-muted">
-          {card.reason_source === "gemini" ? "Reason by Gemini · numbers from your data" : "Reason from your numbers"}
-        </div>
-        <Link
-          href={`/studio?insight=${card.id}`}
-          className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gold px-4 text-sm font-semibold text-bg transition hover:bg-gold2"
-        >
-          Make video · {ANGLE_HINT[card.angle]}
-        </Link>
-      </div>
-    </Card>
   );
 }
 

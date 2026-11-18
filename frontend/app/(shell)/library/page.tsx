@@ -9,6 +9,9 @@ import type { Job, Privacy, Restaurant, Video } from "@/lib/types";
 import { useIsOwner } from "@/hooks/data";
 import { Badge, Button, EmptyState, ErrorCallout, Field, inputCls, Modal, SectionTitle, Skeleton, Spinner, useToast } from "@/components/ui";
 import { PhonePlayer } from "@/components/studio";
+import { Celebration, TileCls, VideoTileThemed } from "@/components/themed/library";
+import { useTheme } from "@/lib/theme";
+import { fanfare, bell } from "@/lib/sfx";
 
 export default function LibraryPage() {
   return (
@@ -31,6 +34,26 @@ function Library() {
   const restaurant = useSWR<Restaurant, ApiError>("/restaurants/me", fetcher);
   const [openId, setOpenId] = useState<number | null>(params.get("video") ? Number(params.get("video")) : null);
   const [prevActive, setPrevActive] = useState(0);
+  const { t, theme, sound } = useTheme();
+  const [celebrate, setCelebrate] = useState(false);
+  const [prevStatus, setPrevStatus] = useState<Record<number, string>>({});
+
+  // Celebrate when a publish we were watching finishes.
+  useEffect(() => {
+    if (!videos.data) return;
+    const next: Record<number, string> = {};
+    let fire = false;
+    for (const v of videos.data) {
+      next[v.id] = v.publish_status;
+      if (prevStatus[v.id] === "publishing" && v.publish_status === "published") fire = true;
+    }
+    setPrevStatus(next);
+    if (fire) {
+      setCelebrate(true);
+      if (sound) (theme === "studio" ? fanfare : bell)();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videos.data]);
 
   // When an in-progress job finishes, pull the new video in.
   useEffect(() => {
@@ -48,14 +71,16 @@ function Library() {
   return (
     <div>
       <SectionTitle
-        title="Library"
-        sub={videos.data ? `${videos.data.length} video${videos.data.length === 1 ? "" : "s"} · newest first` : "Every Short you've made"}
+        title={t.library.title}
+        eyebrow={t.library.eyebrow}
+        sub={videos.data ? t.library.sub(videos.data.length) : undefined}
         right={
-          <Link href="/studio" className="inline-flex min-h-[44px] items-center rounded-xl bg-gold px-4 text-sm font-semibold text-bg hover:bg-gold2">
-            + New video
+          <Link href="/studio" className="inline-flex min-h-[44px] items-center rounded-xl bg-gold px-4 text-sm font-semibold text-ongold hover:bg-gold2">
+            + {t.studio.again}
           </Link>
         }
       />
+      <Celebration show={celebrate} onDone={() => setCelebrate(false)} />
 
       {videos.error && <ErrorCallout error={videos.error} onRetry={() => videos.mutate()} title="Couldn't load your videos" />}
 
@@ -72,21 +97,21 @@ function Library() {
           {videos.data.length === 0 && !(active.data?.length) ? (
             <EmptyState
               icon={<span className="text-4xl">🎬</span>}
-              title="No videos yet"
-              body="Make your first Short in Studio. It lands here, ready to publish."
+              title={t.library.empty}
+              body={t.library.emptyBody}
               action={
-                <Link href="/studio" className="inline-flex min-h-[44px] items-center rounded-xl bg-gold px-4 text-sm font-semibold text-bg">
+                <Link href="/studio" className="inline-flex min-h-[44px] items-center rounded-xl bg-gold px-4 text-sm font-semibold text-ongold">
                   Open Studio
                 </Link>
               }
             />
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <div className={TileCls(theme)}>
               {(active.data ?? []).map((j) => (
                 <ActiveTile key={`j${j.id}`} job={j} />
               ))}
-              {videos.data.map((v) => (
-                <VideoTile key={v.id} v={v} onOpen={() => setOpenId(v.id)} />
+              {videos.data.map((v, i) => (
+                <VideoTileThemed key={v.id} v={v} index={i} restaurant={restaurant.data?.name} onOpen={() => setOpenId(v.id)} />
               ))}
             </div>
           )}
@@ -111,41 +136,6 @@ function statusBadge(v: Video) {
   if (v.publish_status === "publishing") return <Badge tone="gold">Publishing {v.publish_progress}%</Badge>;
   if (v.publish_status === "failed") return <Badge tone="bad">Publish failed</Badge>;
   return <Badge>Draft</Badge>;
-}
-
-function VideoTile({ v, onOpen }: { v: Video; onOpen: () => void }) {
-  return (
-    <article className="group animate-fadeup overflow-hidden rounded-xl border border-line bg-panel">
-      <button onClick={onOpen} className="relative block aspect-[9/16] w-full overflow-hidden bg-black" aria-label={`Play ${v.dish ?? "video"}`}>
-        {v.poster_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={v.poster_url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
-        ) : (
-          <div className="h-full w-full bg-panel2" />
-        )}
-        <span className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100">
-          <span className="grid h-14 w-14 place-items-center rounded-full bg-black/60 text-2xl text-cream backdrop-blur">▶</span>
-        </span>
-        <span className="absolute left-2 top-2">{statusBadge(v)}</span>
-        <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[11px] text-cream">{Math.round(v.duration_s)}s</span>
-      </button>
-      <div className="p-3">
-        <div className="truncate text-sm font-semibold text-cream">{v.dish ?? "Dish"}</div>
-        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted">
-          <span>{timeAgo(v.created_at)}</span>
-          <span className="flex items-center gap-1.5">
-            <span className={cx("font-semibold uppercase", v.mode === "veo" ? "text-gold" : "text-muted")}>{v.mode === "veo" ? "Veo" : "Free"}</span>
-            <span className="font-mono">{money(v.cost_cents)}</span>
-          </span>
-        </div>
-        {v.youtube_url && (
-          <a href={v.youtube_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-ok hover:underline">
-            Published ↗
-          </a>
-        )}
-      </div>
-    </article>
-  );
 }
 
 function ActiveTile({ job }: { job: Job }) {
@@ -176,6 +166,7 @@ function ActiveTile({ job }: { job: Job }) {
 }
 
 function VideoModal({ v, owner, ytConnected, onClose, onChanged }: { v: Video; owner: boolean; ytConnected: boolean; onClose: () => void; onChanged: () => void }) {
+  const { t } = useTheme();
   const [publishing, setPublishing] = useState(false);
   return (
     <Modal open title={v.dish ?? "Video"} onClose={onClose} wide>
@@ -195,7 +186,7 @@ function VideoModal({ v, owner, ytConnected, onClose, onChanged }: { v: Video; o
           {v.youtube_url && (
             <div className="rounded-xl border border-ok/30 bg-ok/5 p-3 text-sm">
               <a href={v.youtube_url} target="_blank" rel="noreferrer" className="font-semibold text-ok hover:underline">
-                Published on YouTube ↗
+                {t.library.live} ↗
               </a>
               <div className="mt-1 break-all font-mono text-xs text-muted">{v.youtube_url}</div>
               {v.youtube_privacy && v.youtube_privacy !== "public" && (
@@ -225,11 +216,11 @@ function VideoModal({ v, owner, ytConnected, onClose, onChanged }: { v: Video; o
             {!owner ? (
               <span className="self-center text-xs text-muted">Publishing is owner-only in demo mode.</span>
             ) : !ytConnected ? (
-              <Link href="/settings#youtube" className="inline-flex min-h-[44px] items-center rounded-xl bg-gold px-4 text-sm font-semibold text-bg">
+              <Link href="/settings#youtube" className="inline-flex min-h-[44px] items-center rounded-xl bg-gold px-4 text-sm font-semibold text-ongold">
                 Connect YouTube
               </Link>
             ) : v.publish_status !== "publishing" ? (
-              <Button onClick={() => setPublishing(true)}>{v.publish_status === "published" ? "Publish again" : v.publish_status === "failed" ? "Retry publish" : "Publish to YouTube"}</Button>
+              <Button onClick={() => setPublishing(true)}>{v.publish_status === "published" ? "Publish again" : v.publish_status === "failed" ? "Retry publish" : t.library.publish}</Button>
             ) : null}
           </div>
         </div>
@@ -240,6 +231,7 @@ function VideoModal({ v, owner, ytConnected, onClose, onChanged }: { v: Video; o
 }
 
 function PublishDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; onDone: () => void }) {
+  const { t } = useTheme();
   const [title, setTitle] = useState(v.title ?? v.dish ?? "");
   const [description, setDescription] = useState(v.description ?? "");
   const [tags, setTags] = useState((v.hashtags ?? []).join(" "));
@@ -254,7 +246,7 @@ function PublishDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; 
       await api(`/videos/${v.id}/publish`, {
         json: { title, description, tags: tags.split(/[\s,]+/).filter(Boolean), privacy },
       });
-      toast("Uploading to YouTube…", "info");
+      toast(t.toast.publishing, "info");
       onDone();
       onClose();
     } catch (e) {
@@ -264,7 +256,7 @@ function PublishDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; 
     }
   };
   return (
-    <Modal open title="Publish to YouTube" onClose={onClose}>
+    <Modal open title={t.library.publish} onClose={onClose}>
       <div className="space-y-4">
         <Field label="Title" htmlFor="pt" hint={<span className={cx(title.length > 70 && "text-gold")}>{title.length}/100 · keep it under 70 so it isn&apos;t cut off</span>}>
           <input id="pt" className={inputCls} value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} />

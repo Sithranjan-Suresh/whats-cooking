@@ -6,7 +6,9 @@ import { api, fetcher, setOwnerToken, ApiError } from "@/lib/api";
 import { cx, money } from "@/lib/format";
 import type { AppSettings, Restaurant } from "@/lib/types";
 import { useHealth, useIsOwner, useOwnerToken, useRestaurant, useUsage } from "@/hooks/data";
-import { Badge, Button, Card, ErrorCallout, Field, inputCls, Meter, SectionTitle, Skeleton, StatTile, Toggle, useToast } from "@/components/ui";
+import { Badge, Button, Card, ErrorCallout, Field, inputCls, SectionTitle, Skeleton, Toggle, useToast } from "@/components/ui";
+import { useTheme } from "@/lib/theme";
+import { BudgetSummary } from "@/components/themed/budget";
 
 export default function SettingsPage() {
   return (
@@ -21,6 +23,7 @@ function Settings() {
   const params = useSearchParams();
   const toast = useToast();
   const r = useRestaurant();
+  const { t } = useTheme();
   useEffect(() => {
     const yt = params.get("youtube");
     if (yt === "connected") {
@@ -32,7 +35,7 @@ function Settings() {
 
   return (
     <div>
-      <SectionTitle title="Brand & Budget" sub="Every video on-brand, every dollar capped." />
+      <SectionTitle title={t.settings.title} eyebrow={t.settings.eyebrow} sub={t.settings.sub} />
       <OwnerUnlock />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
@@ -97,6 +100,8 @@ function OwnerUnlock() {
 
 // ---------------------------------------------------------------- budget
 function BudgetCard({ owner }: { owner: boolean }) {
+  const { t } = useTheme();
+  const restaurantName = useRestaurant().data?.name;
   const usage = useUsage();
   const settings = useSWR<AppSettings, ApiError>("/settings", fetcher);
   const [limit, setLimit] = useState<string>("");
@@ -138,50 +143,29 @@ function BudgetCard({ owner }: { owner: boolean }) {
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-2xl uppercase tracking-wide">Budget</h2>
-        {u && <Badge tone={u.free_mode ? "info" : "gold"}>{u.free_mode ? "Free mode" : "Veo enabled"}</Badge>}
+        <h2 className="font-display text-3xl uppercase tracking-wide kitchen:text-2xl kitchen:normal-case">{t.settings.budget}</h2>
+        {u && <Badge tone={u.free_mode ? "info" : "gold"}>{u.free_mode ? t.settings.freeMode : "Veo enabled"}</Badge>}
       </div>
       {usage.error && <ErrorCallout error={usage.error} onRetry={() => usage.mutate()} />}
       {!u && !usage.error && <Skeleton className="h-40" />}
       {u && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <StatTile label="Today · Veo clips" value={`${u.today.clips}/${u.today.limit}`} tone={u.today.clips >= u.today.limit ? "bad" : undefined} />
-              <div className="mt-2">
-                <Meter value={u.today.clips} max={u.today.limit} label="Veo clips used today" />
-              </div>
-            </div>
-            <div>
-              <StatTile
-                label="This month · est. spend"
-                value={`${money(u.month.est_cents)}`}
-                sub={<>of {money(u.month.cap_cents)} cap</>}
-                tone={u.month.est_cents >= u.month.cap_cents ? "bad" : undefined}
-              />
-              <div className="mt-2">
-                <Meter value={u.month.est_cents} max={u.month.cap_cents} label="Monthly spend" />
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 font-mono text-xs text-muted">
-            Veo: {money(u.cost_per_sec_cents)}/sec · ≈ {money(u.cost_per_sec_cents * 8)} per 8s clip · free mode = $0
-          </div>
+          <BudgetSummary u={u} restaurant={restaurantName} />
 
           <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-line bg-bg/40 px-4 py-3">
             <div>
               <label htmlFor="free" className="text-sm font-semibold text-cream">
-                Free mode
+                {t.settings.freeMode}
               </label>
-              <div className="text-xs text-muted">Never call Veo. Every video uses the free Ken Burns render.</div>
+              <div className="text-xs text-muted">{t.settings.freeModeSub}</div>
             </div>
             <Toggle
               id="free"
-              label="Free mode"
+              label={t.settings.freeMode}
               checked={u.free_mode}
               disabled={!owner || saving}
               onChange={async (v) => {
-                if (await patch({ free_mode: v })) toast(v ? "Free mode on: $0 per video" : "Free mode off", "ok");
+                if (await patch({ free_mode: v })) toast(v ? `${t.settings.freeMode} on: $0 per video` : `${t.settings.freeMode} off`, "ok");
               }}
             />
           </div>
@@ -222,6 +206,7 @@ function BudgetCard({ owner }: { owner: boolean }) {
 
 // ---------------------------------------------------------------- YouTube
 function YouTubeCard({ owner, restaurant }: { owner: boolean; restaurant?: Restaurant }) {
+  const { t } = useTheme();
   const health = useHealth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<ApiError | null>(null);
@@ -250,7 +235,7 @@ function YouTubeCard({ owner, restaurant }: { owner: boolean; restaurant?: Resta
   return (
     <Card className="p-5">
       <div id="youtube" className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-2xl uppercase tracking-wide">YouTube</h2>
+        <h2 className="font-display text-3xl uppercase tracking-wide kitchen:text-2xl kitchen:normal-case">{t.settings.youtube}</h2>
         {restaurant && <Badge tone={restaurant.youtube_connected ? "ok" : "neutral"}>{restaurant.youtube_connected ? "Connected" : "Not connected"}</Badge>}
       </div>
       {restaurant?.youtube_connected ? (
@@ -291,6 +276,7 @@ const TONES = [
 ] as const;
 
 function BrandCard({ owner }: { owner: boolean }) {
+  const { t } = useTheme();
   const r = useRestaurant();
   const [form, setForm] = useState<Partial<Restaurant>>({});
   const [saving, setSaving] = useState(false);
@@ -351,7 +337,7 @@ function BrandCard({ owner }: { owner: boolean }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 font-display text-2xl uppercase tracking-wide">Brand kit</h2>
+      <h2 className="mb-4 font-display text-3xl uppercase tracking-wide kitchen:text-2xl kitchen:normal-case">{t.settings.brand}</h2>
       <CaptionPreview name={form.name ?? ""} primary={form.color_primary ?? "#C49A4A"} accent={form.color_accent ?? "#F3EBDD"} logo={r.data.logo_url} />
       <fieldset disabled={!owner} className="mt-5 space-y-4 disabled:opacity-70">
         <Field label="Restaurant name" htmlFor="rn">
@@ -441,10 +427,10 @@ function CaptionPreview({ name, primary, accent, logo }: { name: string; primary
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="relative aspect-[9/16] overflow-hidden rounded-xl bg-gradient-to-b from-[#5a3b1c] via-[#7a5124] to-[#3a2714]">
-        <div className="absolute inset-x-0 top-[17%] px-3 text-center font-display text-[min(5.5vw,26px)] font-bold uppercase leading-tight" style={{ color: primary, textShadow: outline }}>
+        <div className="absolute inset-x-0 top-[17%] px-3 text-center [font-family:var(--f-bebas)] tracking-wide text-[min(5.5vw,26px)] font-bold uppercase leading-tight" style={{ color: primary, textShadow: outline }}>
           People keep coming back
         </div>
-        <div className="absolute inset-x-0 bottom-[22%] px-3 text-center font-display text-[min(5vw,24px)] font-bold leading-tight" style={{ color: accent, textShadow: outline }}>
+        <div className="absolute inset-x-0 bottom-[22%] px-3 text-center [font-family:var(--f-bebas)] tracking-wide text-[min(5vw,24px)] font-bold leading-tight" style={{ color: accent, textShadow: outline }}>
           Chicken Biryani
         </div>
         <div className="absolute bottom-2 left-2 rounded bg-black/50 px-1.5 text-[10px] uppercase tracking-wider text-cream/80">Captions</div>
@@ -454,14 +440,14 @@ function CaptionPreview({ name, primary, accent, logo }: { name: string; primary
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logo} alt="" className="mb-3 h-14 w-14 object-contain" />
         )}
-        <div className="font-display text-[min(6vw,28px)] font-bold uppercase leading-none" style={{ color: endCardText(primary, accent) }}>
+        <div className="[font-family:var(--f-bebas)] tracking-wide text-[min(6vw,28px)] font-bold uppercase leading-none" style={{ color: endCardText(primary, accent) }}>
           {name || "Your name"}
         </div>
         <div className="my-2 h-0.5 w-10" style={{ background: endCardText(primary, accent) }} />
         <div className="text-xs font-semibold" style={{ color: endCardText(primary, accent) }}>
           Chicken Biryani
         </div>
-        <div className="font-display text-xl" style={{ color: endCardText(primary, accent) }}>
+        <div className="text-xl [font-family:var(--f-bebas)]" style={{ color: endCardText(primary, accent) }}>
           $14.99
         </div>
         <div className="absolute bottom-2 left-2 rounded bg-black/50 px-1.5 text-[10px] uppercase tracking-wider text-cream/80">End card</div>
