@@ -96,7 +96,8 @@ def crops_for(img: Image.Image, n: int) -> list[Image.Image]:
         for fy in ys:
             y = int((h - ch) * fy)
             out.append(img.crop((0, y, cw, y + ch)))
-    return [c.resize((SRC_W, SRC_H), Image.LANCZOS) for c in out]
+    k = max(1.0, min(2.0, get_settings().kb_oversample))
+    return [c.resize((int(W * k), int(H * k)), Image.LANCZOS) for c in out]
 
 
 def _zoompan(kind: str, frames: int, strength: float = 0.12) -> str:
@@ -143,7 +144,7 @@ async def kenburns(photo: Path, total_s: float, work: Path, *, style: str = "bol
     out = work / f"{tag}.mp4"
     await ffmpeg(
         [*args, "-filter_complex", ";".join(fc), "-map", f"[{last}]", "-t", f"{total_s:.3f}",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), out.name],
+         "-c:v", "libx264", "-preset", get_settings().render_preset, "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), out.name],
         cwd=work,
     )
     return out
@@ -571,7 +572,7 @@ async def assemble(
         af += (f";[{amb_idx}:a]{fmt},atrim=0:{main_len:.3f},volume=-9dB,afade=t=out:st={max(main_len - 0.6, 0):.3f}:d=0.6,"
                f"apad,atrim=0:{total:.3f}[amb];{alabel}[amb]amix=inputs=2:duration=first:normalize=0[afinal]")
         alabel = "[afinal]"
-    preset, crf = ("ultrafast", "26") if safe else ("veryfast", "23")
+    preset, crf = ("ultrafast", "26") if safe else (get_settings().render_preset, "23")
     await ffmpeg(
         [*inputs, "-filter_complex", vf + ";" + af, "-map", "[vout]", "-map", alabel,
          "-t", f"{total:.3f}", "-r", str(FPS),

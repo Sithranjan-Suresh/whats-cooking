@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Limits
     max_upload_bytes: int = 10 * 1024 * 1024
     ffmpeg_timeout_s: int = 90
+    # Low-CPU hosts (e.g. Render free): RENDER_PRESET=ultrafast, KB_OVERSAMPLE=1
+    render_preset: str = "veryfast"
+    kb_oversample: float = 2.0
     workers: int = 2
     demo_jobs_per_hour_per_ip: int = 12
 

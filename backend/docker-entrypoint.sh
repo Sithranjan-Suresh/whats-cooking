@@ -2,10 +2,11 @@
 set -e
 cd /app
 mkdir -p "$DATA_DIR"
-# Seed the demo restaurant once per volume (idempotent, ~30s the first time).
+# Seed the demo restaurant once per volume, in the background so the port opens right away
+# (hosts like Render fail a deploy whose port isn't listening within a few minutes).
 if [ ! -f "$DATA_DIR/.seeded" ]; then
-  echo "Seeding demo restaurant…"
-  python seed/seed.py && touch "$DATA_DIR/.seeded"
+  echo "Seeding demo restaurant in the background…"
+  (sleep 3 && python seed/seed.py && touch "$DATA_DIR/.seeded") &
 fi
 # ONE worker on purpose: the job queue and the Veo budget lock live in-process.
 cd backend

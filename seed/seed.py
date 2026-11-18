@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shutil
 import sys
 import time
@@ -143,16 +144,19 @@ async def main() -> None:
         session.add(st)
         session.commit()
 
+        # SEED_RENDER=0 (low-CPU hosts): skip the sample renders; the library starts empty.
+        render_samples = os.environ.get("SEED_RENDER", "1") != "0"
+
         # mock_short.mp4: a real free-mode render of the biryani.
         bir = items.get("chicken biryani")
-        if bir and bir.photo_asset_id and not (SEED / "mock_short.mp4").exists():
+        if render_samples and bir and bir.photo_asset_id and not (SEED / "mock_short.mp4").exists():
             print("rendering seed/mock_short.mp4 …")
             await render_free(session, r, bir, SEED / "mock_short.mp4", angle="rising")
 
         # Historical library videos (only once).
         have = session.exec(select(Video).where(Video.restaurant_id == r.id)).first()
         published = json.loads((SEED / "published.json").read_text()) if (SEED / "published.json").exists() else {}
-        if have is None:
+        if have is None and render_samples:
             for name in ("Butter Chicken", "Tandoori Chicken"):
                 item = items.get(name.lower())
                 if not item or not item.photo_asset_id:
