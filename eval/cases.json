@@ -1,0 +1,2544 @@
+[
+ {
+  "id": "photo_01",
+  "type": "photo",
+  "photo": "seed/photos/chicken-biryani.jpg",
+  "menu_row": {
+   "name": "Chicken Biryani",
+   "price": "$14.99",
+   "description": "Fragrant basmati rice layered with slow-cooked chicken, saffron and crispy fried onions"
+  },
+  "expected": {
+   "name": "Chicken Biryani",
+   "price": "$14.99"
+  }
+ },
+ {
+  "id": "photo_02",
+  "type": "photo",
+  "photo": "seed/photos/butter-chicken.jpg",
+  "menu_row": {
+   "name": "Butter Chicken",
+   "price": "$15.99",
+   "description": "Tandoori chicken simmered in a creamy tomato and butter sauce"
+  },
+  "expected": {
+   "name": "Butter Chicken",
+   "price": "$15.99"
+  }
+ },
+ {
+  "id": "photo_03",
+  "type": "photo",
+  "photo": "seed/photos/palak-paneer.jpg",
+  "menu_row": {
+   "name": "Palak Paneer",
+   "price": "$13.49",
+   "description": "Cottage cheese cubes in a smooth spiced spinach sauce"
+  },
+  "expected": {
+   "name": "Palak Paneer",
+   "price": "$13.49"
+  }
+ },
+ {
+  "id": "photo_04",
+  "type": "photo",
+  "photo": "seed/photos/malai-kofta.jpg",
+  "menu_row": {
+   "name": "Malai Kofta",
+   "price": "$13.99",
+   "description": "Paneer and potato dumplings in a rich cashew cream sauce"
+  },
+  "expected": {
+   "name": "Malai Kofta",
+   "price": "$13.99"
+  }
+ },
+ {
+  "id": "photo_05",
+  "type": "photo",
+  "photo": "seed/photos/tandoori-chicken.jpg",
+  "menu_row": {
+   "name": "Tandoori Chicken",
+   "price": "$14.49",
+   "description": "Chicken marinated in yogurt and spices, roasted in the tandoor"
+  },
+  "expected": {
+   "name": "Tandoori Chicken",
+   "price": "$14.49"
+  }
+ },
+ {
+  "id": "photo_06",
+  "type": "photo",
+  "photo": "seed/photos/vegetable-samosa.jpg",
+  "menu_row": {
+   "name": "Vegetable Samosa",
+   "price": "$5.99",
+   "description": "Two crisp pastries filled with spiced potatoes and peas"
+  },
+  "expected": {
+   "name": "Vegetable Samosa",
+   "price": "$5.99"
+  }
+ },
+ {
+  "id": "photo_07",
+  "type": "photo",
+  "photo": "seed/photos/garlic-naan.jpg",
+  "menu_row": {
+   "name": "Garlic Naan",
+   "price": "$3.49",
+   "description": "Tandoor-baked flatbread brushed with garlic butter and cilantro"
+  },
+  "expected": {
+   "name": "Garlic Naan",
+   "price": "$3.49"
+  }
+ },
+ {
+  "id": "photo_08",
+  "type": "photo",
+  "photo": "seed/photos/mango-lassi.jpg",
+  "menu_row": {
+   "name": "Mango Lassi",
+   "price": "$4.49",
+   "description": "Chilled yogurt drink blended with ripe mango"
+  },
+  "expected": {
+   "name": "Mango Lassi",
+   "price": "$4.49"
+  }
+ },
+ {
+  "id": "photo_09",
+  "type": "photo",
+  "photo": "eval/photos/lamb-rogan-josh.jpg",
+  "menu_row": {
+   "name": "Lamb Rogan Josh",
+   "price": "$17.99",
+   "description": "Tender lamb braised in a Kashmiri chili and yogurt gravy"
+  },
+  "expected": {
+   "name": "Lamb Rogan Josh",
+   "price": "$17.99"
+  }
+ },
+ {
+  "id": "photo_10",
+  "type": "photo",
+  "photo": "eval/photos/chana-masala.jpg",
+  "menu_row": {
+   "name": "Chana Masala",
+   "price": "$11.99",
+   "description": "Chickpeas cooked with onions, tomatoes and warm spices"
+  },
+  "expected": {
+   "name": "Chana Masala",
+   "price": "$11.99"
+  }
+ },
+ {
+  "id": "photo_11",
+  "type": "photo",
+  "photo": "eval/photos/gulab-jamun.jpg",
+  "menu_row": {
+   "name": "Gulab Jamun",
+   "price": "$4.99",
+   "description": "Warm milk dumplings soaked in rose and cardamom syrup"
+  },
+  "expected": {
+   "name": "Gulab Jamun",
+   "price": "$4.99"
+  }
+ },
+ {
+  "id": "photo_12",
+  "type": "photo",
+  "photo": "eval/photos/chefs-thali.jpg",
+  "menu_row": {
+   "name": "Chef's Thali",
+   "price": null,
+   "description": "A daily selection of curries, rice, bread and dessert"
+  },
+  "expected": {
+   "name": "Chef's Thali",
+   "price": null
+  }
+ },
+ {
+  "id": "sales_01_baseline_kumars",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    16
+   ],
+   [
+    "2026-10-26",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-10-27",
+    "Chicken Biryani",
+    7
+   ],
+   [
+    "2026-10-28",
+    "Chicken Biryani",
+    7
+   ],
+   [
+    "2026-10-29",
+    "Chicken Biryani",
+    7
+   ],
+   [
+    "2026-10-30",
+    "Chicken Biryani",
+    7
+   ],
+   [
+    "2026-10-31",
+    "Chicken Biryani",
+    7
+   ],
+   [
+    "2026-11-01",
+    "Chicken Biryani",
+    7
+   ],
+   [
+    "2026-11-02",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-03",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-04",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-05",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-06",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-07",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-08",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-09",
+    "Chicken Biryani",
+    12
+   ],
+   [
+    "2026-11-10",
+    "Chicken Biryani",
+    12
+   ],
+   [
+    "2026-11-11",
+    "Chicken Biryani",
+    12
+   ],
+   [
+    "2026-11-12",
+    "Chicken Biryani",
+    12
+   ],
+   [
+    "2026-11-13",
+    "Chicken Biryani",
+    12
+   ],
+   [
+    "2026-11-14",
+    "Chicken Biryani",
+    12
+   ],
+   [
+    "2026-11-15",
+    "Chicken Biryani",
+    11
+   ],
+   [
+    "2026-10-26",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-10-27",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-10-28",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-10-29",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-10-30",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-10-31",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-01",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-02",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-03",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-04",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-05",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-06",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-07",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-09",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-10",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-11",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-12",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-11-13",
+    "Malai Kofta",
+    1
+   ],
+   [
+    "2026-10-26",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-10-27",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-10-28",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-10-29",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-10-30",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-10-31",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-01",
+    "Garlic Naan",
+    12
+   ],
+   [
+    "2026-11-02",
+    "Garlic Naan",
+    14
+   ],
+   [
+    "2026-11-03",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-04",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-05",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-06",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-07",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-08",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-09",
+    "Garlic Naan",
+    14
+   ],
+   [
+    "2026-11-10",
+    "Garlic Naan",
+    14
+   ],
+   [
+    "2026-11-11",
+    "Garlic Naan",
+    14
+   ],
+   [
+    "2026-11-12",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-13",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-14",
+    "Garlic Naan",
+    13
+   ],
+   [
+    "2026-11-15",
+    "Garlic Naan",
+    13
+   ]
+  ],
+  "expected_top_seller": "Butter Chicken",
+  "expected_rising": "Chicken Biryani"
+ },
+ {
+  "id": "sales_02_rising_is_small_item",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-26",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-10-27",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-10-28",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-10-29",
+    "Mango Lassi",
+    1
+   ],
+   [
+    "2026-10-30",
+    "Mango Lassi",
+    1
+   ],
+   [
+    "2026-10-31",
+    "Mango Lassi",
+    1
+   ],
+   [
+    "2026-11-01",
+    "Mango Lassi",
+    1
+   ],
+   [
+    "2026-11-02",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-11-03",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-11-04",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-11-05",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-11-06",
+    "Mango Lassi",
+    2
+   ],
+   [
+    "2026-11-07",
+    "Mango Lassi",
+    1
+   ],
+   [
+    "2026-11-08",
+    "Mango Lassi",
+    1
+   ],
+   [
+    "2026-11-09",
+    "Mango Lassi",
+    5
+   ],
+   [
+    "2026-11-10",
+    "Mango Lassi",
+    5
+   ],
+   [
+    "2026-11-11",
+    "Mango Lassi",
+    4
+   ],
+   [
+    "2026-11-12",
+    "Mango Lassi",
+    4
+   ],
+   [
+    "2026-11-13",
+    "Mango Lassi",
+    4
+   ],
+   [
+    "2026-11-14",
+    "Mango Lassi",
+    4
+   ],
+   [
+    "2026-11-15",
+    "Mango Lassi",
+    4
+   ],
+   [
+    "2026-10-26",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-27",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-28",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-29",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-30",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-10-31",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-01",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-02",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-03",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-04",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-05",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-06",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-07",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-08",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-09",
+    "Chicken Biryani",
+    10
+   ],
+   [
+    "2026-11-10",
+    "Chicken Biryani",
+    10
+   ],
+   [
+    "2026-11-11",
+    "Chicken Biryani",
+    10
+   ],
+   [
+    "2026-11-12",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-13",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-14",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-11-15",
+    "Chicken Biryani",
+    9
+   ]
+  ],
+  "expected_top_seller": "Butter Chicken",
+  "expected_rising": "Mango Lassi"
+ },
+ {
+  "id": "sales_03_tiny_item_ignored",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    13
+   ],
+   [
+    "2026-10-26",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-02",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-03",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-09",
+    "Gulab Jamun",
+    2
+   ],
+   [
+    "2026-11-10",
+    "Gulab Jamun",
+    2
+   ],
+   [
+    "2026-11-11",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-12",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-13",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-14",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-11-15",
+    "Gulab Jamun",
+    1
+   ],
+   [
+    "2026-10-26",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-10-27",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-10-28",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-10-29",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-10-30",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-10-31",
+    "Garlic Naan",
+    5
+   ],
+   [
+    "2026-11-01",
+    "Garlic Naan",
+    5
+   ],
+   [
+    "2026-11-02",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-11-03",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-11-04",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-11-05",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-11-06",
+    "Garlic Naan",
+    6
+   ],
+   [
+    "2026-11-07",
+    "Garlic Naan",
+    5
+   ],
+   [
+    "2026-11-08",
+    "Garlic Naan",
+    5
+   ],
+   [
+    "2026-11-09",
+    "Garlic Naan",
+    8
+   ],
+   [
+    "2026-11-10",
+    "Garlic Naan",
+    8
+   ],
+   [
+    "2026-11-11",
+    "Garlic Naan",
+    8
+   ],
+   [
+    "2026-11-12",
+    "Garlic Naan",
+    7
+   ],
+   [
+    "2026-11-13",
+    "Garlic Naan",
+    7
+   ],
+   [
+    "2026-11-14",
+    "Garlic Naan",
+    7
+   ],
+   [
+    "2026-11-15",
+    "Garlic Naan",
+    7
+   ]
+  ],
+  "expected_top_seller": "Butter Chicken",
+  "expected_rising": "Garlic Naan"
+ },
+ {
+  "id": "sales_04_new_top_seller",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken",
+    12
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken",
+    11
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    10
+   ],
+   [
+    "2026-10-26",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-27",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-28",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-29",
+    "Chicken Biryani",
+    9
+   ],
+   [
+    "2026-10-30",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-10-31",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-01",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-02",
+    "Chicken Biryani",
+    11
+   ],
+   [
+    "2026-11-03",
+    "Chicken Biryani",
+    11
+   ],
+   [
+    "2026-11-04",
+    "Chicken Biryani",
+    11
+   ],
+   [
+    "2026-11-05",
+    "Chicken Biryani",
+    11
+   ],
+   [
+    "2026-11-06",
+    "Chicken Biryani",
+    11
+   ],
+   [
+    "2026-11-07",
+    "Chicken Biryani",
+    10
+   ],
+   [
+    "2026-11-08",
+    "Chicken Biryani",
+    10
+   ],
+   [
+    "2026-11-09",
+    "Chicken Biryani",
+    14
+   ],
+   [
+    "2026-11-10",
+    "Chicken Biryani",
+    14
+   ],
+   [
+    "2026-11-11",
+    "Chicken Biryani",
+    14
+   ],
+   [
+    "2026-11-12",
+    "Chicken Biryani",
+    14
+   ],
+   [
+    "2026-11-13",
+    "Chicken Biryani",
+    13
+   ],
+   [
+    "2026-11-14",
+    "Chicken Biryani",
+    13
+   ],
+   [
+    "2026-11-15",
+    "Chicken Biryani",
+    13
+   ],
+   [
+    "2026-10-26",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-10-27",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-10-28",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-10-29",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-10-30",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-10-31",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-01",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-02",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-11-03",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-11-04",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-05",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-06",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-07",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-08",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-09",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-11-10",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-11-11",
+    "Palak Paneer",
+    5
+   ],
+   [
+    "2026-11-12",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-13",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-14",
+    "Palak Paneer",
+    4
+   ],
+   [
+    "2026-11-15",
+    "Palak Paneer",
+    4
+   ]
+  ],
+  "expected_top_seller": "Chicken Biryani",
+  "expected_rising": "Palak Paneer"
+ },
+ {
+  "id": "sales_05_flat_week",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Butter Chicken",
+    8
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken",
+    8
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    8
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    7
+   ],
+   [
+    "2026-10-26",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-10-27",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-10-28",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-10-29",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-10-30",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-10-31",
+    "Tandoori Chicken",
+    5
+   ],
+   [
+    "2026-11-01",
+    "Tandoori Chicken",
+    5
+   ],
+   [
+    "2026-11-02",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-03",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-04",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-05",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-06",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-07",
+    "Tandoori Chicken",
+    5
+   ],
+   [
+    "2026-11-08",
+    "Tandoori Chicken",
+    5
+   ],
+   [
+    "2026-11-09",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-10",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-11",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-12",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-13",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-14",
+    "Tandoori Chicken",
+    6
+   ],
+   [
+    "2026-11-15",
+    "Tandoori Chicken",
+    5
+   ],
+   [
+    "2026-10-26",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-10-27",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-10-28",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-10-29",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-10-30",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-10-31",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-01",
+    "Chana Masala",
+    2
+   ],
+   [
+    "2026-11-02",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-03",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-04",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-05",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-06",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-07",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-08",
+    "Chana Masala",
+    2
+   ],
+   [
+    "2026-11-09",
+    "Chana Masala",
+    4
+   ],
+   [
+    "2026-11-10",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-11",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-12",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-13",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-14",
+    "Chana Masala",
+    3
+   ],
+   [
+    "2026-11-15",
+    "Chana Masala",
+    3
+   ]
+  ],
+  "expected_top_seller": "Butter Chicken",
+  "expected_rising": "Chana Masala"
+ },
+ {
+  "id": "sales_06_pos_spellings",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-10-27",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-10-28",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-10-29",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-10-30",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-10-31",
+    "Chicken Biriyani",
+    5
+   ],
+   [
+    "2026-11-01",
+    "Chicken Biriyani",
+    5
+   ],
+   [
+    "2026-11-02",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-11-03",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-11-04",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-11-05",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-11-06",
+    "Chicken Biriyani",
+    6
+   ],
+   [
+    "2026-11-07",
+    "Chicken Biriyani",
+    5
+   ],
+   [
+    "2026-11-08",
+    "Chicken Biriyani",
+    5
+   ],
+   [
+    "2026-11-09",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-11-10",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-11-11",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-11-12",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-11-13",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-11-14",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-11-15",
+    "Chicken Biriyani",
+    10
+   ],
+   [
+    "2026-10-26",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken (LG)",
+    12
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken (LG)",
+    14
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken (LG)",
+    13
+   ],
+   [
+    "2026-10-26",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-10-27",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-10-28",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-10-29",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-10-30",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-10-31",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-01",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-02",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-11-03",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-11-04",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-05",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-06",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-07",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-08",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-09",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-11-10",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-11-11",
+    "Veg Samosa",
+    5
+   ],
+   [
+    "2026-11-12",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-13",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-14",
+    "Veg Samosa",
+    4
+   ],
+   [
+    "2026-11-15",
+    "Veg Samosa",
+    4
+   ]
+  ],
+  "expected_top_seller": "Butter Chicken",
+  "expected_rising": "Chicken Biryani"
+ },
+ {
+  "id": "sales_07_declining_top",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-10-26",
+    "Garlic Naan",
+    22
+   ],
+   [
+    "2026-10-27",
+    "Garlic Naan",
+    22
+   ],
+   [
+    "2026-10-28",
+    "Garlic Naan",
+    22
+   ],
+   [
+    "2026-10-29",
+    "Garlic Naan",
+    21
+   ],
+   [
+    "2026-10-30",
+    "Garlic Naan",
+    21
+   ],
+   [
+    "2026-10-31",
+    "Garlic Naan",
+    21
+   ],
+   [
+    "2026-11-01",
+    "Garlic Naan",
+    21
+   ],
+   [
+    "2026-11-02",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-03",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-04",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-05",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-06",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-07",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-08",
+    "Garlic Naan",
+    20
+   ],
+   [
+    "2026-11-09",
+    "Garlic Naan",
+    18
+   ],
+   [
+    "2026-11-10",
+    "Garlic Naan",
+    17
+   ],
+   [
+    "2026-11-11",
+    "Garlic Naan",
+    17
+   ],
+   [
+    "2026-11-12",
+    "Garlic Naan",
+    17
+   ],
+   [
+    "2026-11-13",
+    "Garlic Naan",
+    17
+   ],
+   [
+    "2026-11-14",
+    "Garlic Naan",
+    17
+   ],
+   [
+    "2026-11-15",
+    "Garlic Naan",
+    17
+   ],
+   [
+    "2026-10-26",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-10-27",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-10-28",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-10-29",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-10-30",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-10-31",
+    "Mango Lassi",
+    5
+   ],
+   [
+    "2026-11-01",
+    "Mango Lassi",
+    5
+   ],
+   [
+    "2026-11-02",
+    "Mango Lassi",
+    7
+   ],
+   [
+    "2026-11-03",
+    "Mango Lassi",
+    7
+   ],
+   [
+    "2026-11-04",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-11-05",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-11-06",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-11-07",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-11-08",
+    "Mango Lassi",
+    6
+   ],
+   [
+    "2026-11-09",
+    "Mango Lassi",
+    9
+   ],
+   [
+    "2026-11-10",
+    "Mango Lassi",
+    9
+   ],
+   [
+    "2026-11-11",
+    "Mango Lassi",
+    9
+   ],
+   [
+    "2026-11-12",
+    "Mango Lassi",
+    9
+   ],
+   [
+    "2026-11-13",
+    "Mango Lassi",
+    8
+   ],
+   [
+    "2026-11-14",
+    "Mango Lassi",
+    8
+   ],
+   [
+    "2026-11-15",
+    "Mango Lassi",
+    8
+   ],
+   [
+    "2026-10-26",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-27",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-10-28",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-29",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-30",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-10-31",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-01",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-02",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-03",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-04",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-05",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-06",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-07",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-08",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    15
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    14
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    14
+   ]
+  ],
+  "expected_top_seller": "Garlic Naan",
+  "expected_rising": "Mango Lassi"
+ },
+ {
+  "id": "sales_08_short_history",
+  "type": "sales",
+  "csv_rows": [
+   [
+    "2026-11-09",
+    "Butter Chicken",
+    6
+   ],
+   [
+    "2026-11-10",
+    "Butter Chicken",
+    6
+   ],
+   [
+    "2026-11-11",
+    "Butter Chicken",
+    6
+   ],
+   [
+    "2026-11-12",
+    "Butter Chicken",
+    6
+   ],
+   [
+    "2026-11-13",
+    "Butter Chicken",
+    6
+   ],
+   [
+    "2026-11-14",
+    "Butter Chicken",
+    5
+   ],
+   [
+    "2026-11-15",
+    "Butter Chicken",
+    5
+   ],
+   [
+    "2026-11-09",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-10",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-11",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-12",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-13",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-14",
+    "Chicken Biryani",
+    8
+   ],
+   [
+    "2026-11-15",
+    "Chicken Biryani",
+    7
+   ]
+  ],
+  "expected_top_seller": "Chicken Biryani",
+  "expected_rising": null
+ }
+]

@@ -209,8 +209,10 @@ def template_script(menu_row: dict, angle: Optional[str], restaurant_name: str, 
         facts.append({"field": "description", "value": desc})
     if price:
         facts.append({"field": "price", "value": price})
-    tag = "#" + re.sub(r"[^A-Za-z0-9]", "", name.title())[:30]
-    rest_tag = "#" + re.sub(r"[^A-Za-z0-9]", "", restaurant_name.title())[:30]
+    def _tag(s: str) -> str:
+        return "#" + re.sub(r"[^A-Za-z0-9]", "", re.sub(r"['’]", "", s).title())[:30]
+
+    tag, rest_tag = _tag(name), _tag(restaurant_name)
     script = {
         "hook": hook,
         "beats": [{"caption": wrap_caption(b), "seconds": per} for b in beats],
@@ -235,8 +237,39 @@ async def write_script(
     visual_notes: str,
     angle_metric: Optional[str] = None,
     not_on_menu: bool = False,
+    use_cache: bool = True,
 ) -> tuple[dict, str, Optional[str]]:
-    """Returns (script, source, note). source ∈ gemini|gemini_repaired|template."""
+    """Returns (script, source, note). source ∈ gemini|gemini_repaired|template.
+
+    Successful AI scripts are cached per (menu row, angle, tone, style, length, visual notes), so retries and
+    rehearsals don't burn free-tier quota. Pass use_cache=False to force a fresh draft.
+    """
+    key = gemini.cache_key("script", menu_row, restaurant_name, angle, tone, style, length_s, visual_notes, angle_metric, not_on_menu)
+    if use_cache:
+        hit = gemini.cache_get(key)
+        if hit is not None:
+            return hit["script"], hit["source"], None
+    script, source, note = await _write_script(
+        menu_row=menu_row, restaurant_name=restaurant_name, angle=angle, tone=tone, style=style, length_s=length_s,
+        visual_notes=visual_notes, angle_metric=angle_metric, not_on_menu=not_on_menu,
+    )
+    if source != "template":
+        gemini.cache_put(key, {"script": script, "source": source})
+    return script, source, note
+
+
+async def _write_script(
+    *,
+    menu_row: dict,
+    restaurant_name: str,
+    angle: Optional[str],
+    tone: str,
+    style: str,
+    length_s: int,
+    visual_notes: str,
+    angle_metric: Optional[str] = None,
+    not_on_menu: bool = False,
+) -> tuple[dict, str, Optional[str]]:
     row = dict(menu_row)
     if not_on_menu:
         row = {"name": None, "price": None, "description": None}

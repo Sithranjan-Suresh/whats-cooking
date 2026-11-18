@@ -164,3 +164,71 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
     session.refresh(job)
     job_queue.enqueue(job.id)
     return JSONResponse({"job_id": job.id}, status_code=202)
+
+
+class BeatEdit(BaseModel):
+    caption: str
+
+
+class ScriptEdit(BaseModel):
+    hook: Optional[str] = None
+    beats: list[BeatEdit]
+    voiceover: Optional[str] = None
+
+
+@router.post("/jobs/{job_id}/edit", status_code=202)
+def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Actor = Depends(get_actor),
+                      session: Session = Depends(get_session)):
+    """Edit captions (and optionally hook/voiceover) of a finished job and re-render.
+
+    Edits go through the same grounding validator as AI drafts, so a typo'd price can't ship.
+    """
+    from ..models import jload
+    from ..services import scripts as sc
+    from ..pipeline import initial_stages as stages0
+
+    old = session.get(Job, job_id)
+    if not old or not old.script_json:
+        raise AppError("not_found", "Job or script not found", 404)
+    if actor != "owner":
+        _rate_limit(request.client.host if request.client else "unknown")
+    script = jload(old.script_json, {})
+    if not body.beats or len(body.beats) > 8:
+        raise AppError("validation_error", "Give 1 to 8 caption beats.", 422)
+    old_beats = script.get("beats", [])
+    new_beats = []
+    for i, b in enumerate(body.beats):
+        secs = old_beats[i]["seconds"] if i < len(old_beats) else 3.0
+        new_beats.append({"caption": b.caption.strip(), "seconds": secs})
+    script["beats"] = new_beats
+    if body.hook is not None:
+        script["hook"] = body.hook.strip()
+    if body.voiceover is not None:
+        script["voiceover"] = body.voiceover.strip()
+    script = sc.normalize_script({**script, "facts_used": script.get("facts_used", [])}, old.length_s)
+    flags = jload(old.flags_json, {}) or {}
+    item = session.get(MenuItem, old.menu_item_id) if old.menu_item_id else None
+    row = sc.menu_row_for(item) if item else {"name": None, "price": None, "description": None}
+    problems = sc.validate_script(script, row, old.length_s, not_on_menu=bool(flags.get("not_on_menu")) or item is None)
+    if problems:
+        raise AppError("not_grounded", "Edit breaks a grounding rule: " + "; ".join(problems), 422)
+    script = sc.annotate_beats(script, row)
+    script["source"] = "edited"
+    stages = stages0()
+    for st in stages:
+        if st["name"] in ("analyze", "script"):
+            st["status"] = "done"
+            st["note"] = "Reused" if st["name"] == "analyze" else "Edited by you · grounding checked"
+    new_flags = {k: v for k, v in flags.items() if k in ("not_on_menu", "continue_anyway")}
+    new_flags["demo"] = actor != "owner"
+    job = Job(
+        restaurant_id=old.restaurant_id, mode=old.mode, menu_item_id=old.menu_item_id,
+        photo_asset_id=old.photo_asset_id, insight_id=old.insight_id, angle=old.angle, style=old.style,
+        length_s=old.length_s, veo_requested=old.veo_requested, status="queued", stages_json=jdump(stages),
+        analyze_json=old.analyze_json, script_json=jdump(script), flags_json=jdump(new_flags),
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    job_queue.enqueue(job.id)
+    return JSONResponse({"job_id": job.id}, status_code=202)

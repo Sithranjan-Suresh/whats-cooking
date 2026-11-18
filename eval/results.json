@@ -1,0 +1,142 @@
+{
+ "photo": [
+  {
+   "id": "photo_01",
+   "dish": "Chicken Biryani",
+   "price": "$14.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_02",
+   "dish": "Butter Chicken",
+   "price": "$15.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_03",
+   "dish": "Palak Paneer",
+   "price": "$13.49",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_04",
+   "dish": "Malai Kofta",
+   "price": "$13.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_05",
+   "dish": "Tandoori Chicken",
+   "price": "$14.49",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_06",
+   "dish": "Vegetable Samosa",
+   "price": "$5.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_07",
+   "dish": "Garlic Naan",
+   "price": "$3.49",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_08",
+   "dish": "Mango Lassi",
+   "price": "$4.49",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_09",
+   "dish": "Lamb Rogan Josh",
+   "price": "$17.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_10",
+   "dish": "Chana Masala",
+   "price": "$11.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_11",
+   "dish": "Gulab Jamun",
+   "price": "$4.99",
+   "skipped": "no GEMINI_API_KEY"
+  },
+  {
+   "id": "photo_12",
+   "dish": "Chef's Thali",
+   "price": null,
+   "skipped": "no GEMINI_API_KEY"
+  }
+ ],
+ "sales": [
+  {
+   "id": "sales_01_baseline_kumars",
+   "top": "Butter Chicken",
+   "rising": "Chicken Biryani",
+   "expected_top": "Butter Chicken",
+   "expected_rising": "Chicken Biryani",
+   "pass": true
+  },
+  {
+   "id": "sales_02_rising_is_small_item",
+   "top": "Butter Chicken",
+   "rising": "Mango Lassi",
+   "expected_top": "Butter Chicken",
+   "expected_rising": "Mango Lassi",
+   "pass": true
+  },
+  {
+   "id": "sales_03_tiny_item_ignored",
+   "top": "Butter Chicken",
+   "rising": "Garlic Naan",
+   "expected_top": "Butter Chicken",
+   "expected_rising": "Garlic Naan",
+   "pass": true
+  },
+  {
+   "id": "sales_04_new_top_seller",
+   "top": "Chicken Biryani",
+   "rising": "Palak Paneer",
+   "expected_top": "Chicken Biryani",
+   "expected_rising": "Palak Paneer",
+   "pass": true
+  },
+  {
+   "id": "sales_05_flat_week",
+   "top": "Butter Chicken",
+   "rising": "Chana Masala",
+   "expected_top": "Butter Chicken",
+   "expected_rising": "Chana Masala",
+   "pass": true
+  },
+  {
+   "id": "sales_06_pos_spellings",
+   "top": "Butter Chicken",
+   "rising": "Chicken Biryani",
+   "expected_top": "Butter Chicken",
+   "expected_rising": "Chicken Biryani",
+   "pass": true
+  },
+  {
+   "id": "sales_07_declining_top",
+   "top": "Garlic Naan",
+   "rising": "Mango Lassi",
+   "expected_top": "Garlic Naan",
+   "expected_rising": "Mango Lassi",
+   "pass": true
+  },
+  {
+   "id": "sales_08_short_history",
+   "top": "Chicken Biryani",
+   "rising": null,
+   "expected_top": "Chicken Biryani",
+   "expected_rising": null,
+   "pass": true
+  }
+ ]
+}

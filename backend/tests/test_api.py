@@ -141,3 +141,67 @@ def test_usage_and_settings_validation(client):
     u = client.get("/usage", headers=OWNER).json()
     assert u["veo"]["allowed"] is True
     assert client.patch("/settings", json={"daily_veo_clip_limit": 99}, headers=OWNER).status_code == 422
+
+
+def _menu_job(client, name="Chicken Biryani", veo=False, headers=None):
+    menu = client.get("/menu").json()
+    item = next(m for m in menu if m["name"] == name)
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"], "veo": veo},
+                    headers=headers or {})
+    return r.json()["job_id"]
+
+
+def test_owner_veo_failure_falls_back_and_releases_budget(client, monkeypatch):
+    from app.services import veo
+
+    async def boom(*a, **k):
+        raise veo.VeoError("timeout", "simulated")
+
+    monkeypatch.setattr(veo, "generate_clip", boom)
+    jid = _menu_job(client, veo=True, headers=OWNER)
+    j = _wait(client, jid, until=("done", "failed"), timeout=90)
+    assert j["status"] == "done"
+    assert j["fallback_reason"] == "veo_timeout" and j["veo_used"] is False and j["cost_cents"] == 0
+    u = client.get("/usage", headers=OWNER).json()
+    assert u["today"]["clips"] == 0  # reservation released
+
+
+def test_owner_veo_daily_limit_falls_back(client, monkeypatch):
+    from app.services import veo
+
+    called = []
+
+    async def never(*a, **k):
+        called.append(1)
+
+    monkeypatch.setattr(veo, "generate_clip", never)
+    client.patch("/settings", json={"daily_veo_clip_limit": 0}, headers=OWNER)
+    jid = _menu_job(client, veo=True, headers=OWNER)
+    j = _wait(client, jid, until=("done", "failed"), timeout=90)
+    assert j["fallback_reason"] == "daily_limit" and not called
+
+
+def test_edit_rerender_enforces_grounding(client):
+    jid = _menu_job(client)
+    j = _wait(client, jid, until=("done", "failed"), timeout=90)
+    assert j["status"] == "done"
+    bad = client.post(f"/jobs/{jid}/edit", json={"beats": [{"caption": "Chicken Biryani"}, {"caption": "Now $9.99!"}]})
+    assert bad.status_code == 422 and bad.json()["error"]["code"] == "not_grounded"
+    ok = client.post(f"/jobs/{jid}/edit", json={"beats": [{"caption": "Chicken Biryani"}, {"caption": "Saffron and fried onions"}, {"caption": "Only $14.99"}]})
+    assert ok.status_code == 202
+    j2 = _wait(client, ok.json()["job_id"], until=("done", "failed"), timeout=90)
+    assert j2["status"] == "done" and j2["script"]["source"] == "edited"
+    assert [b["caption"] for b in j2["script"]["beats"]][1] == "Saffron and fried\nonions"
+
+
+def test_map_unmatched_sales_item(client):
+    csv_text = b"date,item_name,quantity\n2026-11-01,Chicken Biryani,5\n2026-11-02,House Biryani Special,7\n"
+    r = client.post("/sales/import", files={"file": ("s.csv", csv_text, "text/csv")}, headers=OWNER).json()
+    assert r["unmatched_items"] == ["House Biryani Special"]
+    menu = client.get("/menu").json()
+    bid = next(m["id"] for m in menu if m["name"] == "Chicken Biryani")
+    out = client.post("/sales/map", json={"raw_item_name": "House Biryani Special", "menu_item_id": bid}, headers=OWNER).json()
+    assert out["mapped"] == 1 and out["unmatched_items"] == []
+    cards = client.get("/insights").json()["cards"]
+    assert cards[0]["menu_item"]["name"] == "Chicken Biryani" and cards[0]["metric"]["qty_7d"] == 12

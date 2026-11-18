@@ -1,0 +1,12 @@
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+frontend
+backend/data
+data
+.git
+*.md
+!README.md
+veo_smoke_*.mp4
+.env

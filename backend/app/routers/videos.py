@@ -120,12 +120,21 @@ async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_a
 
 # ------------------------------------------------------------------ YouTube OAuth
 
-@router.get("/youtube/auth/start")
-def yt_start(token: str | None = None, session: Session = Depends(get_session)):
-    # Browser navigation can't send headers, so the owner token comes as a query param here.
-    from ..auth import resolve_actor
+@router.get("/youtube/auth/url")
+def yt_auth_url(actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+    """Owner-only: returns the Google consent URL (the frontend then navigates to it)."""
+    require_owner(actor)
+    r = current_restaurant(session)
+    try:
+        return {"url": youtube.auth_url(r.id)}
+    except youtube.YouTubeError as e:
+        raise AppError(e.code, e.message, 400) from e
 
-    require_owner(resolve_actor(token))
+
+@router.get("/youtube/auth/start")
+def yt_start(actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+    """Same as /youtube/auth/url but answers with a 302 (for curl / scripts that send X-Owner-Token)."""
+    require_owner(actor)
     r = current_restaurant(session)
     try:
         return RedirectResponse(youtube.auth_url(r.id), status_code=302)

@@ -18,6 +18,40 @@ log = logging.getLogger("app.gemini")
 _client = None
 
 
+# ---------------------------------------------------------------- tiny LRU cache (saves free-tier quota on retries/rehearsals)
+import hashlib
+from collections import OrderedDict
+
+_cache: "OrderedDict[str, Any]" = OrderedDict()
+_CACHE_MAX = 256
+
+
+def cache_key(*parts: Any) -> str:
+    h = hashlib.sha256()
+    for p in parts:
+        h.update(p if isinstance(p, bytes) else json.dumps(p, sort_keys=True, default=str).encode())
+        h.update(b"|")
+    return h.hexdigest()
+
+
+def cache_get(key: str) -> Any:
+    if key in _cache:
+        _cache.move_to_end(key)
+        return json.loads(json.dumps(_cache[key]))  # defensive copy
+    return None
+
+
+def cache_put(key: str, value: Any) -> None:
+    _cache[key] = value
+    _cache.move_to_end(key)
+    while len(_cache) > _CACHE_MAX:
+        _cache.popitem(last=False)
+
+
+def cache_clear() -> None:
+    _cache.clear()
+
+
 class GeminiError(Exception):
     def __init__(self, kind: str, message: str = ""):
         super().__init__(message or kind)
@@ -160,6 +194,16 @@ def _validate_analyze(d: Any, menu_ids: set[int]) -> dict:
 async def analyze_photo(image: tuple[bytes, str], menu: list[dict]) -> dict:
     """menu: [{id, name, price, description}] (max 150 used)."""
     menu = menu[:150]
+    key = cache_key("analyze", get_settings().gemini_text_model, image[0], menu)
+    hit = cache_get(key)
+    if hit is not None:
+        return hit
+    out = await _analyze_photo(image, menu)
+    cache_put(key, out)
+    return out
+
+
+async def _analyze_photo(image: tuple[bytes, str], menu: list[dict]) -> dict:
     lines = "\n".join(
         f"- id={m['id']} | {m['name']} | {m.get('price') or 'no price'} | {(m.get('description') or '')[:120]}"
         for m in menu
@@ -193,6 +237,16 @@ async def analyze_photo(image: tuple[bytes, str], menu: list[dict]) -> dict:
 
 
 async def describe_photo(image: tuple[bytes, str], dish_name: str) -> dict:
+    key = cache_key("describe", get_settings().gemini_text_model, image[0], dish_name)
+    hit = cache_get(key)
+    if hit is not None:
+        return hit
+    out = await _describe_photo(image, dish_name)
+    cache_put(key, out)
+    return out
+
+
+async def _describe_photo(image: tuple[bytes, str], dish_name: str) -> dict:
     prompt = (
         f"This is a photo of '{dish_name}' from a restaurant. Return JSON: is_food, visual_notes "
         "(one sentence: colors, garnish, steam, plating, vessel), quality (good, dark or blurry)."

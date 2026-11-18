@@ -6,6 +6,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
+from pydantic import BaseModel
 from sqlmodel import Session, delete, select
 
 from ..auth import Actor, get_actor, require_owner
@@ -154,3 +155,28 @@ def get_insight(insight_id: int, session: Session = Depends(get_session)):
     if not ins:
         raise AppError("not_found", "That insight is gone (sales data was refreshed).", 404)
     return insight_card(session, ins)
+
+
+class MapItem(BaseModel):
+    raw_item_name: str
+    menu_item_id: int
+
+
+@router.post("/sales/map")
+async def map_unmatched(body: MapItem, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+    """Map a POS item name that didn't match the menu to a menu item, then recompute insights."""
+    require_owner(actor)
+    r = current_restaurant(session)
+    item = session.get(MenuItem, body.menu_item_id)
+    if not item or item.restaurant_id != r.id:
+        raise AppError("not_found", "Menu item not found", 404)
+    rows = session.exec(select(SalesRecord).where(SalesRecord.restaurant_id == r.id,
+                                                  SalesRecord.raw_item_name == body.raw_item_name)).all()
+    if not rows:
+        raise AppError("not_found", "No sales rows with that name", 404)
+    for row in rows:
+        row.menu_item_id = item.id
+        session.add(row)
+    session.commit()
+    await compute_insights(session, r.id, r.name)
+    return {"mapped": len(rows), **sales_summary(session)}
