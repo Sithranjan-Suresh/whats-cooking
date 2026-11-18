@@ -2,6 +2,8 @@
 
 **A restaurant's dish photos and sales data → a published YouTube Short in about a minute. No editing, capped cost.**
 
+**Live test:** https://whats-cooking-jade.vercel.app (frontend on Vercel) · API https://whats-cooking-api-cr07.onrender.com (Render free: sleeps after 15 min idle, files reset on restart).
+
 What's Cooking? reads a restaurant's sales export to decide which dish to promote, writes a hook, captions and voiceover
 grounded in the real menu, turns a single dish photo into a vertical video (AI motion with Google Veo, or a free Ken Burns
 render), and publishes it to the restaurant's YouTube channel. The owner sets a monthly budget and the system never exceeds it.
