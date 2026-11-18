@@ -18,7 +18,7 @@ log = logging.getLogger("app.render")
 W, H, FPS = 720, 1280, 30
 SRC_W, SRC_H = 1440, 2560  # 2x oversample to keep zoompan smooth
 XFADE = 0.5
-END_CARD_S = 2.8
+END_CARD_S = 2.3
 END_XFADE = 0.35
 
 STYLE_PRESETS = {
@@ -153,6 +153,11 @@ async def veo_plus_tail(veo_clip: Path, photo: Path, total_s: float, work: Path,
     """Veo clip (normalized, max 8s) + Ken Burns tail on the same photo, crossfaded."""
     info = await probe_video(veo_clip)
     veo_len = min(8.0, info["duration_s"] or 8.0)
+    if info.get("has_audio"):
+        try:
+            await ffmpeg(["-i", str(veo_clip), "-vn", "-t", f"{min(veo_len, total_s):.3f}", "-c:a", "aac", "-b:a", "128k", "ambient.m4a"], cwd=work)
+        except FFmpegError:
+            pass
     if veo_len >= total_s:
         out = work / "visuals.mp4"
         await ffmpeg(
@@ -529,8 +534,10 @@ async def assemble(
     voice: Optional[dict],
     music: Optional[Path],
     out_path: Path,
+    ambient: Optional[Path] = None,
     safe: bool = False,
 ) -> Path:
+    """ambient: Veo's own sound (sizzle, steam), mixed low under the narrator for the motion section."""
     link_fonts(work)
     (work / "captions.ass").write_text(ass_text, encoding="utf-8")
     total = main_len + END_CARD_S
@@ -549,12 +556,21 @@ async def assemble(
         inputs += ["-i", str(voice["path"])]
     if has_music:
         inputs += ["-stream_loop", "-1", "-i", str(music)]
+    has_amb = bool(ambient and Path(ambient).exists())
+    amb_idx = 2 + int(has_voice) + int(has_music)
+    if has_amb:
+        inputs += ["-i", str(ambient)]
     vf = (
         f"[0:v]setsar=1,format=yuv420p,trim=0:{main_len:.3f},setpts=PTS-STARTPTS,ass=captions.ass:fontsdir=fonts,fps=30,settb=AVTB[main];"
         f"[1:v]scale={W}:{H},setsar=1,format=yuv420p,fps={FPS},trim=0:{END_CARD_S + END_XFADE:.3f},setpts=PTS-STARTPTS,settb=AVTB[card];"
         f"[main][card]xfade=transition=fade:duration={END_XFADE}:offset={main_len - END_XFADE:.3f}[vout]"
     )
     af, alabel = _audio_graph(has_voice, has_music, total, tempo, safe)
+    if has_amb:
+        fmt = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
+        af += (f";[{amb_idx}:a]{fmt},atrim=0:{main_len:.3f},volume=-9dB,afade=t=out:st={max(main_len - 0.6, 0):.3f}:d=0.6,"
+               f"apad,atrim=0:{total:.3f}[amb];{alabel}[amb]amix=inputs=2:duration=first:normalize=0[afinal]")
+        alabel = "[afinal]"
     preset, crf = ("ultrafast", "26") if safe else ("veryfast", "23")
     await ffmpeg(
         [*inputs, "-filter_complex", vf + ";" + af, "-map", "[vout]", "-map", alabel,

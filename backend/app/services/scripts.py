@@ -8,7 +8,7 @@ from typing import Optional
 
 from ..util import fmt_price, normalize_name
 from . import gemini
-from .gemini import END_CARD_S
+from .gemini import END_CARD_S, vo_words
 
 log = logging.getLogger("app.scripts")
 
@@ -92,8 +92,8 @@ def validate_script(script: dict, menu_row: dict, length_s: int, *, not_on_menu:
     if claims:
         problems.append(f"invented claims not in the menu: {', '.join(sorted(set(claims)))}")
     words = len(str(script.get("voiceover", "")).split())
-    max_words = 38 if length_s <= 15 else 75
-    if words > max_words + 6:
+    max_words = vo_words(length_s)
+    if words > max_words + (3 if length_s <= 8 else 6):
         problems.append(f"voiceover is {words} words; keep it under {max_words}")
     if len(script.get("hook", "").split()) > 10:
         problems.append("hook must be 8 words or fewer")
@@ -187,8 +187,9 @@ def template_script(menu_row: dict, angle: Optional[str], restaurant_name: str, 
     desc = (menu_row.get("description") or "").rstrip(".")
     hook = ANGLE_HOOKS.get(angle, ANGLE_HOOKS[None])
     main_len = length_s - END_CARD_S
+    short_video = length_s <= 8
     beats = [hook, name if not not_on_menu else "Fresh from our kitchen"]
-    if desc:
+    if desc and not short_video:
         short = desc if len(desc) <= 44 else desc[:41].rsplit(" ", 1)[0] + "…"
         beats.append(short)
     beats.append(f"Only {price}" if price else f"At {restaurant_name}")
@@ -198,15 +199,16 @@ def template_script(menu_row: dict, angle: Optional[str], restaurant_name: str, 
         vo_parts.append(f"The {name} at {restaurant_name}.")
     else:
         vo_parts.append(f"Fresh from the kitchen at {restaurant_name}.")
-    if desc:
+    if desc and not short_video:
         vo_parts.append(desc + ".")
     if price:
         vo_parts.append(f"Just {price}.")
-    vo_parts.append("Come try it today.")
+    if not short_video:
+        vo_parts.append("Come try it today.")
     voiceover = " ".join(vo_parts)
     words = voiceover.split()
-    if len(words) > (38 if length_s <= 15 else 75):
-        voiceover = " ".join(words[:38]).rstrip(",.") + "."
+    if len(words) > vo_words(length_s) + 2:
+        voiceover = " ".join(words[: vo_words(length_s) + 2]).rstrip(",.") + "."
     facts = [{"field": "name", "value": name}] if not not_on_menu else []
     if desc:
         facts.append({"field": "description", "value": desc})

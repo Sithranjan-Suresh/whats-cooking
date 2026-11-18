@@ -40,7 +40,7 @@ class JobCreate(BaseModel):
     menu_item_id: Optional[int] = None
     insight_id: Optional[int] = None
     style: Literal["bold", "warm", "minimal"] = "bold"
-    length_s: Literal[15, 30] = 15
+    length_s: Literal[8, 15, 30] = 8
     veo: bool = False
 
 
@@ -70,6 +70,12 @@ def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_act
     a = session.get(Asset, photo_asset_id)
     if not a or a.restaurant_id != r.id or a.kind != "photo":
         raise AppError("not_found", "Photo not found. Upload it again.", 404)
+    if body.veo and actor == "owner":
+        from ..services import budget
+
+        d = budget.check(session, r.id, 8)
+        if not d.allowed and d.reason in ("daily_limit", "monthly_cap"):
+            raise AppError("budget_cap_reached", budget.cap_message(session, r.id, d.reason, d.est_cost_cents), 402)
     flags = {"demo": actor != "owner"}
     job = Job(
         restaurant_id=r.id, mode=body.mode, menu_item_id=menu_item_id if body.mode != "photo" else body.menu_item_id,
@@ -232,3 +238,46 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     session.refresh(job)
     job_queue.enqueue(job.id)
     return JSONResponse({"job_id": job.id}, status_code=202)
+
+
+class DishCreate(BaseModel):
+    name: str
+    price: Optional[str] = None
+    description: Optional[str] = None
+    photo_asset_id: int
+
+
+@router.post("/dishes")
+def create_dish(body: DishCreate, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+    """Quick-take dashboard: add (or update) a dish by name with its photo, so scripts stay grounded in what you typed."""
+    from ..auth import require_owner
+    from ..serializers import menu_item_out
+    from ..util import normalize_name, parse_price_cents
+
+    require_owner(actor)
+    r = current_restaurant(session)
+    name = " ".join(body.name.split())[:80]
+    if not name:
+        raise AppError("validation_error", "Give the dish a name.", 422)
+    price_cents = None
+    if body.price and body.price.strip():
+        price_cents = parse_price_cents(body.price)
+        if price_cents is None:
+            raise AppError("validation_error", "Price should look like 14.99", 422)
+    a = session.get(Asset, body.photo_asset_id)
+    if not a or a.restaurant_id != r.id or a.kind != "photo":
+        raise AppError("not_found", "Photo not found. Upload it again.", 404)
+    norm = normalize_name(name)
+    item = session.exec(select(MenuItem).where(MenuItem.restaurant_id == r.id, MenuItem.name_norm == norm)).first()
+    if item is None:
+        item = MenuItem(restaurant_id=r.id, name=name, name_norm=norm, category="Specials")
+    item.name = name
+    if body.price is not None:
+        item.price_cents = price_cents
+    if body.description is not None:
+        item.description = " ".join(body.description.split())[:240] or None
+    item.photo_asset_id = a.id
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return menu_item_out(session, item)

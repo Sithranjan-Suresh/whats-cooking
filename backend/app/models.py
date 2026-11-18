@@ -80,7 +80,7 @@ class Job(SQLModel, table=True):
     insight_id: Optional[int] = Field(default=None, foreign_key="insight.id")
     angle: Optional[str] = None
     style: str = "bold"
-    length_s: int = 15
+    length_s: int = 8
     veo_requested: bool = False
     veo_used: bool = False
     fallback_reason: Optional[str] = None
@@ -137,7 +137,7 @@ class AppSettings(SQLModel, table=True):
     __tablename__ = "settings"
     restaurant_id: int = Field(primary_key=True, foreign_key="restaurant.id")
     daily_veo_clip_limit: int = 10
-    monthly_cap_cents: int = 1500
+    monthly_cap_cents: int = 1000
     free_mode: bool = False
     veo_cost_per_sec_cents: int = 8
     veo_audio_cost_per_sec_cents: int = 15  # Veo with native audio (star-host format)

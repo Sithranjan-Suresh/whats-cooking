@@ -126,7 +126,7 @@ export interface Job {
   mode: "photo" | "insight" | "menu";
   angle: Angle | null;
   style: Style;
-  length_s: 15 | 30;
+  length_s: 8 | 15 | 30;
   veo_requested: boolean;
   stages: Stage[];
   analyze: Analyze | null;

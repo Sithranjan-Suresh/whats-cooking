@@ -7,7 +7,8 @@ import { api, fetcher, ApiError } from "@/lib/api";
 import { ANGLE_HINT, ANGLE_LABEL, cx, money } from "@/lib/format";
 import type { InsightCard, InsightsResponse, MenuItem, Style } from "@/lib/types";
 import { useIsOwner, useJob, useUsage } from "@/hooks/data";
-import { Badge, Button, Card, ErrorCallout, SectionTitle, Skeleton, Toggle, useToast } from "@/components/ui";
+import { Badge, Button, Card, ErrorCallout, Field, inputCls, SectionTitle, Skeleton, Toggle, useToast } from "@/components/ui";
+import { StudioBranding } from "@/components/branding";
 import { DishPickerModal, EditCaptionsModal, MenuPicker, PhotoDrop, validatePhoto } from "@/components/studio";
 import { GenerateButton, PlayerStage, ScriptSheet, StageBoard } from "@/components/themed/studio";
 import { useTheme } from "@/lib/theme";
@@ -45,8 +46,11 @@ function Studio() {
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [style, setStyle] = useState<Style>("bold");
-  const [length, setLength] = useState<15 | 30>(15);
-  const [veo, setVeo] = useState(false);
+  const [length, setLength] = useState<8 | 15>(8);
+  const [veo, setVeo] = useState(true);
+  const [dishName, setDishName] = useState("");
+  const [dishPrice, setDishPrice] = useState("");
+  const [dishDesc, setDishDesc] = useState("");
   const [jobId, setJobId] = useState<number | null>(jobParam ? Number(jobParam) : null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<ApiError | null>(null);
@@ -103,16 +107,19 @@ function Studio() {
 
   const veoInfo = usage.data?.veo;
   const veoAllowed = !!veoInfo?.allowed;
+  const [veoTouched, setVeoTouched] = useState(false);
   useEffect(() => {
+    // Realistic motion is the default whenever the budget allows it (until the user flips it).
     if (!veoAllowed) setVeo(false);
-  }, [veoAllowed]);
+    else if (!veoTouched) setVeo(true);
+  }, [veoAllowed, veoTouched]);
 
   const dish: MenuItem | null = source === "insight" ? insightItem : source === "menu" ? menuItem : menu.find((m) => m.id === photoDishId) ?? null;
   const needsPhoto = source !== "photo" && dish && !dish.photo_url;
   const previewImg = photo?.url ?? dish?.photo_url ?? null;
 
   const ready =
-    (source === "photo" && !!photo) ||
+    (source === "photo" && !!photo && dishName.trim().length > 0) ||
     (source === "insight" && !!insight && (!!insightItem?.photo_url || !!photo)) ||
     (source === "menu" && !!menuItem && (!!menuItem.photo_url || !!photo));
 
@@ -147,8 +154,19 @@ function Studio() {
     setCreateError(null);
     const body: Record<string, unknown> = { mode: source, style, length_s: length, veo: veo && veoAllowed };
     if (source === "photo") {
-      body.photo_asset_id = photo?.id;
-      if (photoDishId) body.menu_item_id = photoDishId;
+      // Quick take: save the typed dish (name/price/description) so the script is grounded in it.
+      try {
+        const d = await api<MenuItem>("/dishes", {
+          json: { name: dishName.trim(), price: dishPrice.trim() || null, description: dishDesc.trim() || null, photo_asset_id: photo?.id },
+        });
+        body.mode = "menu";
+        body.menu_item_id = d.id;
+        menuQ.mutate();
+      } catch (e) {
+        setCreateError(e as ApiError);
+        setCreating(false);
+        return;
+      }
     } else if (source === "insight") {
       body.insight_id = insightId;
       if (photo) body.photo_asset_id = photo.id;
@@ -217,6 +235,8 @@ function Studio() {
         }
       />
 
+      {!showResult && <StudioBranding />}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_370px]">
         <div className="space-y-6">
           {!showResult && (
@@ -249,14 +269,17 @@ function Studio() {
                 <div className="space-y-4">
                   <PhotoDrop onFile={uploadPhoto} busy={uploading} preview={photo?.url} />
                   {photoError && <p className="text-sm text-bad">{photoError}</p>}
-                  <details className="rounded-xl border border-line px-3 py-2">
-                    <summary className="cursor-pointer text-sm text-muted">
-                      Which dish is it? <span className="text-cream">{photoDishId ? menu.find((m) => m.id === photoDishId)?.name : "Optional, we'll detect it"}</span>
-                    </summary>
-                    <div className="mt-3">
-                      <MenuPicker menu={menu} value={photoDishId} onChange={(m) => setPhotoDishId(m.id === photoDishId ? null : m.id)} compact />
-                    </div>
-                  </details>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_130px]">
+                    <Field label="Dish name" htmlFor="dname">
+                      <input id="dname" className={inputCls} value={dishName} maxLength={80} placeholder="e.g. Masala Dosa" onChange={(e) => setDishName(e.target.value)} />
+                    </Field>
+                    <Field label="Price" htmlFor="dprice">
+                      <input id="dprice" inputMode="decimal" className={inputCls} value={dishPrice} maxLength={10} placeholder="11.50" onChange={(e) => setDishPrice(e.target.value)} />
+                    </Field>
+                  </div>
+                  <Field label="What's in it (optional)" htmlFor="ddesc" hint="The narrator only says what you write here, so nothing gets made up.">
+                    <input id="ddesc" className={inputCls} value={dishDesc} maxLength={240} placeholder="Crispy rice crepe with spiced potato" onChange={(e) => setDishDesc(e.target.value)} />
+                  </Field>
                 </div>
               )}
 
@@ -322,7 +345,7 @@ function Studio() {
                 <div>
                   <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted">Length</div>
                   <div className="grid grid-cols-2 gap-1 rounded-xl bg-bg p-1">
-                    {([15, 30] as const).map((l) => (
+                    {([8, 15] as const).map((l) => (
                       <button
                         key={l}
                         onClick={() => setLength(l)}
@@ -342,13 +365,13 @@ function Studio() {
                     {t.studio.veo}{" "}
                     {veoInfo && <span className="font-mono text-gold">≈ {money(veoInfo.est_cents)}</span>}
                   </label>
-                  <div className="text-xs text-muted">
+                  <div className={cx("text-xs", veoInfo && ["daily_limit", "monthly_cap"].includes(veoInfo.reason ?? "") ? "font-semibold text-bad" : "text-muted")}>
                     {veoAllowed
                       ? t.studio.veoOn
                       : veoInfo?.message || "Loading budget…"}
                   </div>
                 </div>
-                <Toggle id="veo" label={t.studio.veo} checked={veo} onChange={setVeo} disabled={!veoAllowed} />
+                <Toggle id="veo" label={t.studio.veo} checked={veo} onChange={(v) => { setVeoTouched(true); setVeo(v); }} disabled={!veoAllowed} />
               </div>
 
               {createError && (
@@ -360,7 +383,7 @@ function Studio() {
               <GenerateButton onClick={generate} disabled={!ready} loading={creating} />
               {!ready && (
                 <p className="mt-2 text-center text-xs text-muted">
-                  {source === "photo" ? "Add a dish photo to start." : source === "insight" ? (insight ? "Add a photo for this dish." : "Pick an insight.") : menuItem ? "Add a photo for this dish." : "Pick a dish."}
+                  {source === "photo" ? (photo ? "Give the dish a name." : "Add a dish photo and its name to start.") : source === "insight" ? (insight ? "Add a photo for this dish." : "Pick an insight.") : menuItem ? "Add a photo for this dish." : "Pick a dish."}
                 </p>
               )}
             </Card>

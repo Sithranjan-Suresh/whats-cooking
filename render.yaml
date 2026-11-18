@@ -15,7 +15,7 @@ services:
       - key: DATA_DIR
         value: /data
       - key: DEMO_MODE
-        value: "1"
+        value: "0"           # single tester: everyone who opens the site can make videos (Veo still capped at $10)
       - key: MOCK_PIPELINE
         value: "0"
       - key: DEMO_CACHE

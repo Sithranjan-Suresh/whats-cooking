@@ -167,7 +167,7 @@ def test_owner_veo_failure_falls_back_and_releases_budget(client, monkeypatch):
     assert u["today"]["clips"] == 0  # reservation released
 
 
-def test_owner_veo_daily_limit_falls_back(client, monkeypatch):
+def test_budget_cap_blocks_with_clear_error(client, monkeypatch):
     from app.services import veo
 
     called = []
@@ -176,10 +176,54 @@ def test_owner_veo_daily_limit_falls_back(client, monkeypatch):
         called.append(1)
 
     monkeypatch.setattr(veo, "generate_clip", never)
-    client.patch("/settings", json={"daily_veo_clip_limit": 0}, headers=OWNER)
+    client.patch("/settings", json={"monthly_cap_cents": 50}, headers=OWNER)  # less than one 64¢ clip
+    menu = client.get("/menu").json()
+    item = next(m for m in menu if m["name"] == "Chicken Biryani")
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"], "veo": True}, headers=OWNER)
+    assert r.status_code == 402
+    body = r.json()["error"]
+    assert body["code"] == "budget_cap_reached" and "$0.50" in body["message"] and "Turn off Real motion" in body["message"]
+    assert not called
+    # free mode still works under the cap
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"], "veo": False}, headers=OWNER)
+    assert r.status_code == 202
+
+
+def test_veo_success_8s_with_ambient_sound(client, monkeypatch, tmp_path):
+    """Fake Veo returns an 8s 9:16 clip WITH audio; the Short is 8s, uses Veo, and keeps sound."""
+    import subprocess
+
+    from app.services import veo
+
+    async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
+                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", str(out_path)], check=True)
+        return out_path
+
+    monkeypatch.setattr(veo, "generate_clip", fake_clip)
     jid = _menu_job(client, veo=True, headers=OWNER)
+    j = _wait(client, jid, until=("done", "failed"), timeout=120)
+    assert j["status"] == "done", j
+    assert j["veo_used"] is True and j["cost_cents"] == 64 and j["fallback_reason"] is None
+    v = client.get("/videos").json()[0]
+    assert v["mode"] == "veo" and abs(v["duration_s"] - 8.0) < 0.2
+    u = client.get("/usage", headers=OWNER).json()
+    assert u["today"]["clips"] == 1 and u["month"]["est_cents"] == 64
+
+
+def test_quick_take_dish_upload(client):
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    r = client.post("/dishes", json={"name": "Masala Dosa", "price": "11.50", "description": "Crispy rice crepe with potato masala", "photo_asset_id": up["asset_id"]}, headers=OWNER)
+    assert r.status_code == 200, r.json()
+    d = r.json()
+    assert d["price"] == "$11.50" and d["photo_url"]
+    assert client.post("/dishes", json={"name": "X", "price": "abc", "photo_asset_id": up["asset_id"]}, headers=OWNER).status_code == 422
+    jid = client.post("/jobs", json={"mode": "menu", "menu_item_id": d["id"]}).json()["job_id"]
     j = _wait(client, jid, until=("done", "failed"), timeout=90)
-    assert j["fallback_reason"] == "daily_limit" and not called
+    assert j["status"] == "done" and j["length_s"] == 8
+    assert "Masala Dosa" in j["script"]["voiceover"] and "$11.50" in j["script"]["voiceover"]
 
 
 def test_edit_rerender_enforces_grounding(client):

@@ -13,7 +13,17 @@ from typing import Any, Optional
 
 from ..config import get_settings
 
-END_CARD_S = 2.8  # keep in sync with render.END_CARD_S
+END_CARD_S = 2.3  # keep in sync with render.END_CARD_S
+LENGTHS = (8, 15, 30)
+
+
+def vo_words(length_s: int) -> int:
+    """Max voiceover words that fit before the end card (~2.8 words/sec)."""
+    return 16 if length_s <= 8 else 38 if length_s <= 15 else 75
+
+
+def n_beats(length_s: int) -> str:
+    return "2-3" if length_s <= 8 else "3-4" if length_s <= 15 else "5-6"
 
 log = logging.getLogger("app.gemini")
 
@@ -371,8 +381,8 @@ def build_script_prompt(
     visual_notes: str,
     angle_metric: Optional[str] = None,
 ) -> tuple[str, str]:
-    words = 38 if length_s <= 15 else 75
-    n_beats = "3-4" if length_s <= 15 else "5-6"
+    words = vo_words(length_s)
+    beats_n = n_beats(length_s)
     main_len = length_s - END_CARD_S
     system = (
         "You write scripts for vertical YouTube Shorts promoting a single restaurant dish.\n" + SCRIPT_RULES
@@ -386,8 +396,8 @@ STYLE: {STYLE_NOTES.get(style, STYLE_NOTES['bold'])}
 LENGTH: {length_s} seconds total (the last {END_CARD_S:g}s is an animated logo end card).
 
 Write JSON:
-- hook: scroll-stopping opener, max 8 words.
-- beats: {n_beats} on-screen captions. Each caption max 2 lines of max 22 characters per line (use \\n for the line break). 'seconds' per beat must sum to about {main_len:g}.
+- hook: scroll-stopping opener, max {6 if length_s <= 8 else 8} words.
+- beats: {beats_n} short on-screen captions. Each caption max 2 lines of max 22 characters per line (use \\n for the line break). 'seconds' per beat must sum to about {main_len:g}.
 - voiceover: spoken script, max {words} words, natural to read aloud, mentions the dish name.
 - veo_prompt: a prompt for an image-to-video model animating this exact photo like a high-end food commercial: real action fitting this dish (e.g. chef's hands spooning sauce or garnish, sizzle, steam billowing, a spoon lifting a portion) plus a smooth cinematic push-in. No faces, no text, no logos; keep the dish recognisable.
 - title: YouTube title, max 70 characters, includes the dish name.

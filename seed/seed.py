@@ -64,9 +64,9 @@ async def render_free(session: Session, r: Restaurant, item: MenuItem, out: Path
     work.mkdir(parents=True, exist_ok=True)
     photo = Path(session.get(Asset, item.photo_asset_id).path)
     row = scripts.menu_row_for(item)
-    script = scripts.template_script(row, angle, r.name, 15)
+    script = scripts.template_script(row, angle, r.name, 8)
     script["source"] = "template"
-    main_len = 15 - render.END_CARD_S
+    main_len = 8 - render.END_CARD_S
     visuals = await render.kenburns(photo, main_len, work)
     voice = await tts.synthesize(script["voiceover"], r.tts_voice, work / "voice.mp3", tone=r.voice_tone)
     speech = (voice["timings"][0]["start"] + 0.3, voice["timings"][-1]["end"] + 0.3) if voice and voice.get("timings") else None

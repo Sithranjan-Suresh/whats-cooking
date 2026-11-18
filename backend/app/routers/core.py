@@ -214,12 +214,11 @@ def usage(actor: Actor = Depends(get_actor), session: Session = Depends(get_sess
     r = current_restaurant(session)
     snap = budget.usage_snapshot(session, r.id)
     d = budget.check(session, r.id)
-    snap["veo"] = {
-        "allowed": d.allowed and actor == "owner",
-        "reason": "demo_mode" if actor != "owner" else d.reason,
-        "message": budget.DENY_MESSAGES.get("demo_mode" if actor != "owner" else (d.reason or ""), None),
-        "est_cents": d.est_cost_cents,
-    }
+    reason = "demo_mode" if actor != "owner" else d.reason
+    message = budget.DENY_MESSAGES.get(reason or "", None)
+    if reason in ("daily_limit", "monthly_cap"):
+        message = budget.cap_message(session, r.id, reason, d.est_cost_cents)
+    snap["veo"] = {"allowed": d.allowed and actor == "owner", "reason": reason, "message": message, "est_cents": d.est_cost_cents}
     return snap
 
 

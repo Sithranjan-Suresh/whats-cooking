@@ -45,7 +45,7 @@ export const COPY: { studio: Copy } = {
       generate: "Action!",
       generating: "Rolling…",
       again: "New take",
-      tabs: { photo: "Headshot", insight: "From casting", menu: "From the menu" },
+      tabs: { photo: "New dish", insight: "From casting", menu: "From the menu" },
       veo: "Real motion (Veo)",
       veoOn: "Turns the still into 8 seconds of real motion. Falls back to free camera work automatically.",
       scriptTitle: "Screenplay",

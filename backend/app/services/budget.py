@@ -122,3 +122,15 @@ DENY_MESSAGES = {
     "monthly_cap": "Monthly cap reached",
     "demo_mode": "Demo mode: Veo is reserved for the presenter",
 }
+
+
+def cap_message(session: Session, restaurant_id: int, reason: str, est_cents: int) -> str:
+    st = get_app_settings(session, restaurant_id)
+    snap = usage_snapshot(session, restaurant_id)
+    if reason == "daily_limit":
+        return (f"Today's limit of {st.daily_veo_clip_limit} realistic videos is used up. "
+                "Turn off Real motion to make this one free, or raise the daily limit in the Production Office.")
+    left = max(0, st.monthly_cap_cents - snap["month"]["est_cents"])
+    return (f"Budget cap reached: this realistic video costs about ${est_cents / 100:.2f}, but only ${left / 100:.2f} "
+            f"is left of your ${st.monthly_cap_cents / 100:.2f} cap. Turn off Real motion to make it free, "
+            "or raise the cap in the Production Office.")

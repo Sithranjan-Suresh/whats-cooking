@@ -164,7 +164,7 @@ class Ctx:
             self.mode = job.mode
             self.angle = job.angle
             self.style = job.style if job.style in render.STYLE_PRESETS else "bold"
-            self.length_s = job.length_s if job.length_s in (15, 30) else 15
+            self.length_s = job.length_s if job.length_s in (8, 15, 30) else 8
             self.veo_requested = job.veo_requested
             self.flags = _flags(job)
             self.analyze = jload(job.analyze_json, {}) or {}
@@ -380,6 +380,10 @@ async def _visuals(ctx: Ctx) -> Path:
             fallback = "demo_mode"
         else:
             decision = budget.reserve_veo(ctx.restaurant_id, jid, seconds=8)
+            if not decision.allowed and decision.reason in ("daily_limit", "monthly_cap"):
+                with session_scope() as s:
+                    msg = budget.cap_message(s, ctx.restaurant_id, decision.reason, decision.est_cost_cents)
+                raise StageFailed("visuals", msg)
             if not decision.allowed:
                 fallback = decision.reason
             else:
@@ -450,7 +454,8 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
     out = media / "videos" / f"job_{jid}_{int(time.time())}.mp4"
     try:
         await render.assemble_with_retry(work=ctx.work, visuals=visuals, main_len=main_len, ass_text=ass,
-                                         end_card_png=card, voice=voice, music=ctx.music_path, out_path=out)
+                                         end_card_png=card, voice=voice, music=ctx.music_path, out_path=out,
+                                         ambient=ctx.work / "ambient.m4a")
         poster = await render.extract_poster(out, media / "posters" / (out.stem + ".jpg"))
         info = await probe_video(out)
     except FFmpegError as e:
