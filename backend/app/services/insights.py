@@ -192,7 +192,8 @@ def rank(
             )
             used.add(r)
     # Slow mover (needs a photo so we can make a video)
-    slow_cands = [m for m in all_items | items_with_photo if m not in used and m in items_with_photo]
+    # Only dishes that actually appear in this sales file (never leftovers from an older menu).
+    slow_cands = [m for m in all_items if m not in used and m in items_with_photo]
     if slow_cands:
         s = min(slow_cands, key=lambda m: (qty14[m], qty7[m], m))
         picks.append(Pick("slow_mover", s, {"qty_7d": qty7[s], "qty_14d": qty14[s]}))

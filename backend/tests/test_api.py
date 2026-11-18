@@ -241,7 +241,7 @@ def test_edit_rerender_enforces_grounding(client):
 
 def test_map_unmatched_sales_item(client):
     csv_text = b"date,item_name,quantity\n2026-11-01,Chicken Biryani,5\n2026-11-02,House Biryani Special,7\n"
-    r = client.post("/sales/import", files={"file": ("s.csv", csv_text, "text/csv")}, headers=OWNER).json()
+    r = client.post("/sales/import?create_missing=false", files={"file": ("s.csv", csv_text, "text/csv")}, headers=OWNER).json()
     assert r["unmatched_items"] == ["House Biryani Special"]
     menu = client.get("/menu").json()
     bid = next(m["id"] for m in menu if m["name"] == "Chicken Biryani")
@@ -249,3 +249,25 @@ def test_map_unmatched_sales_item(client):
     assert out["mapped"] == 1 and out["unmatched_items"] == []
     cards = client.get("/insights").json()["cards"]
     assert cards[0]["menu_item"]["name"] == "Chicken Biryani" and cards[0]["metric"]["qty_7d"] == 12
+
+
+def test_any_restaurant_csv_creates_dishes_and_picks_one(client):
+    """A CSV with dishes not on the menu: they're created with the typical price paid, junk lines skipped."""
+    rows = ["date,item_name,quantity,revenue"]
+    from datetime import date, timedelta
+
+    end = date(2026, 11, 15)
+    for d in range(21):
+        day = (end - timedelta(days=20 - d)).isoformat()
+        rows.append(f"{day},MASALA DOSA,{6 if d < 14 else 9},{(6 if d < 14 else 9) * 11.5:.2f}")
+        rows.append(f"{day},Filter Coffee,{4},{4 * 3.25:.2f}")
+        rows.append(f"{day},Gift Card,1,25.00")
+        rows.append(f"{day},Delivery Fee,2,7.98")
+    r = client.post("/sales/import", files={"file": ("s.csv", "\n".join(rows).encode(), "text/csv")}, headers=OWNER).json()
+    assert sorted(r["dishes_created"]) == ["Filter Coffee", "Masala Dosa"]
+    assert set(r["unmatched_items"]) == {"Gift Card", "Delivery Fee"}
+    menu = {m["name"]: m for m in client.get("/menu").json()}
+    assert menu["Masala Dosa"]["price"] == "$11.50" and menu["Filter Coffee"]["price"] == "$3.25"
+    cards = client.get("/insights").json()["cards"]
+    names = {c["angle"]: c["menu_item"]["name"] for c in cards}
+    assert names["top_seller"] == "Masala Dosa"

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
@@ -16,13 +17,17 @@ from ..errors import AppError
 from ..models import Insight, MenuItem, SalesRecord, jdump
 from ..serializers import insight_card
 from ..services import gemini
+from ..util import normalize_name
 from ..services.insights import CsvFormatError, build_matcher, metric_label, parse_sales_csv, rank, rule_reason
 
 log = logging.getLogger("app.insights")
 router = APIRouter()
 
 
-def import_sales_text(session: Session, restaurant_id: int, text: str) -> dict:
+NOT_A_DISH = re.compile(r"gift ?card|\btip\b|gratuity|\bfee\b|service charge|delivery|discount|refund|\btax\b|catering|bag|utensil|deposit|surcharge|comp\b", re.I)
+
+
+def import_sales_text(session: Session, restaurant_id: int, text: str, *, create_missing: bool = False) -> dict:
     try:
         parsed = parse_sales_csv(text)
     except CsvFormatError as e:
@@ -31,6 +36,30 @@ def import_sales_text(session: Session, restaurant_id: int, text: str) -> dict:
         raise AppError("bad_csv", f"No valid sales rows found ({parsed.dropped} rows dropped).")
     menu = session.exec(select(MenuItem).where(MenuItem.restaurant_id == restaurant_id)).all()
     match = build_matcher([(m.id, m.name) for m in menu])
+    created: list[str] = []
+    if create_missing:
+        # Any restaurant: dishes come straight from the CSV. Price = typical price paid (median revenue/qty).
+        from statistics import median
+
+        by_name: dict[str, list[float]] = {}
+        for r in parsed.rows:
+            if match(r.item_name) is None and not NOT_A_DISH.search(r.item_name):
+                by_name.setdefault(r.item_name.strip(), [])
+                if r.revenue_cents and r.quantity:
+                    by_name[r.item_name.strip()].append(r.revenue_cents / r.quantity)
+        seen_norm = {m.name_norm for m in menu}
+        for raw, unit_prices in by_name.items():
+            norm = normalize_name(raw)
+            if not norm or norm in seen_norm:
+                continue
+            seen_norm.add(norm)
+            price = int(round(median(unit_prices))) if unit_prices else None
+            name = " ".join(w if w.isupper() and len(w) <= 3 else w.capitalize() for w in raw.split()) if raw.islower() or raw.isupper() else raw
+            session.add(MenuItem(restaurant_id=restaurant_id, name=name, name_norm=norm, price_cents=price, category="From sales"))
+            created.append(name)
+        session.commit()
+        menu = session.exec(select(MenuItem).where(MenuItem.restaurant_id == restaurant_id)).all()
+        match = build_matcher([(m.id, m.name) for m in menu])
     # Replace semantics: a new export replaces the previous one (single restaurant, documented in contract.md).
     session.exec(delete(SalesRecord).where(SalesRecord.restaurant_id == restaurant_id))
     session.exec(delete(Insight).where(Insight.restaurant_id == restaurant_id))
@@ -50,6 +79,7 @@ def import_sales_text(session: Session, restaurant_id: int, text: str) -> dict:
         "date_to": max(dates).isoformat(),
         "days": (max(dates) - min(dates)).days + 1,
         "unmatched_items": sorted(unmatched, key=lambda k: -unmatched[k]),
+        "dishes_created": created,
     }
 
 
@@ -102,13 +132,14 @@ def _mock_cards() -> dict:
 
 
 @router.post("/sales/import")
-async def sales_import(file: UploadFile = File(...), actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+async def sales_import(file: UploadFile = File(...), create_missing: bool = True, actor: Actor = Depends(get_actor),
+                       session: Session = Depends(get_session)):
     require_owner(actor)
     r = current_restaurant(session)
     raw = await file.read(5 * 1024 * 1024 + 1)
     if len(raw) > 5 * 1024 * 1024:
         raise AppError("file_too_large", "Sales CSV must be under 5 MB.", 413)
-    out = import_sales_text(session, r.id, raw.decode("utf-8-sig", errors="replace"))
+    out = import_sales_text(session, r.id, raw.decode("utf-8-sig", errors="replace"), create_missing=create_missing)
     await compute_insights(session, r.id, r.name)
     return out
 

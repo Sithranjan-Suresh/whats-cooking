@@ -145,16 +145,16 @@ def yt_start(actor: Actor = Depends(get_actor), session: Session = Depends(get_s
 @router.get("/youtube/auth/callback")
 def yt_callback(code: str | None = None, state: str | None = None, error: str | None = None,
                 session: Session = Depends(get_session)):
-    front = get_settings().frontend_origin.rstrip("/")
+    front = get_settings().frontend_origin.split(",")[0].strip().rstrip("/")
     if error or not code or not state:
-        return RedirectResponse(f"{front}/settings?youtube=error&reason={error or 'missing_code'}", status_code=302)
+        return RedirectResponse(f"{front}/?youtube=error&reason={error or 'missing_code'}", status_code=302)
     try:
         info = youtube.exchange_code(code, state)
     except youtube.YouTubeError as e:
-        return RedirectResponse(f"{front}/settings?youtube=error&reason={e.code}", status_code=302)
+        return RedirectResponse(f"{front}/?youtube=error&reason={e.code}", status_code=302)
     except Exception:  # noqa: BLE001
         log.exception("oauth exchange failed")
-        return RedirectResponse(f"{front}/settings?youtube=error&reason=exchange_failed", status_code=302)
+        return RedirectResponse(f"{front}/?youtube=error&reason=exchange_failed", status_code=302)
     auth = session.get(YouTubeAuth, info["restaurant_id"]) or YouTubeAuth(
         restaurant_id=info["restaurant_id"], refresh_token="")
     auth.refresh_token = encrypt(info["refresh_token"])
@@ -162,7 +162,7 @@ def yt_callback(code: str | None = None, state: str | None = None, error: str | 
     auth.channel_title = info["channel_title"]
     session.add(auth)
     session.commit()
-    return RedirectResponse(f"{front}/settings?youtube=connected", status_code=302)
+    return RedirectResponse(f"{front}/?youtube=connected", status_code=302)
 
 
 @router.post("/youtube/disconnect")

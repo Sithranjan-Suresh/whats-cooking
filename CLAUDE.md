@@ -8,7 +8,7 @@ Solo project. Specs: `full_context.md`, `product_spec.md`, `engineering_spec.md`
   - `app/pipeline.py` stage machine (analyze → script → visuals → voice → assemble), mock + demo-cache runners
   - `app/services/` gemini, scripts (grounding validator + template fallback), veo, budget (Veo guard), tts, render, insights, youtube
   - `app/routers/` core (health, brand, menu, uploads, usage, settings), insights, jobs, videos (+ YouTube OAuth)
-- `frontend/` Next.js 15 App Router + Tailwind 3 + SWR. Pages in `app/(shell)/{insights,studio,library,settings}`.
+- `frontend/` Next.js 15 App Router + Tailwind 3 + SWR. One page (`app/page.tsx`): logo → dish (sales CSV pick or photo) → Action! → Post to YouTube, plus "Your videos" history. Hollywood theme in `lib/theme.tsx` + `app/globals.css`.
 - `seed/` Kumar's demo data (`build_assets.py` generates sales/music/placeholders; `seed.py` loads the DB).
 - `eval/` grounding eval (`build_cases.py`, `run_eval.py` → `results.md`).
 - `scripts/` model check, Veo smoke test, hero render, secret generator.
