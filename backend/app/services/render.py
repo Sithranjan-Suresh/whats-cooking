@@ -173,7 +173,7 @@ async def veo_plus_tail(veo_clip: Path, photo: Path, total_s: float, work: Path,
     out = work / "visuals.mp4"
     fc = (
         f"[0:v]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},setsar=1,format=yuv420p,"
-        f"trim=0:{veo_len:.3f},setpts=PTS-STARTPTS,settb=AVTB[a];"
+        f"trim=0:{veo_len:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[a];"
         f"[1:v]setsar=1,format=yuv420p,fps={FPS},settb=AVTB[b];"
         f"[a][b]xfade=transition=fade:duration={XFADE}:offset={veo_len - XFADE:.3f}[v]"
     )
@@ -562,8 +562,8 @@ async def assemble(
     if has_amb:
         inputs += ["-i", str(ambient)]
     vf = (
-        f"[0:v]setsar=1,format=yuv420p,trim=0:{main_len:.3f},setpts=PTS-STARTPTS,ass=captions.ass:fontsdir=fonts,fps=30,settb=AVTB[main];"
-        f"[1:v]scale={W}:{H},setsar=1,format=yuv420p,fps={FPS},trim=0:{END_CARD_S + END_XFADE:.3f},setpts=PTS-STARTPTS,settb=AVTB[card];"
+        f"[0:v]setsar=1,format=yuv420p,trim=0:{main_len:.3f},setpts=PTS-STARTPTS,ass=captions.ass:fontsdir=fonts,fps={FPS},settb=AVTB[main];"
+        f"[1:v]scale={W}:{H},setsar=1,format=yuv420p,trim=0:{END_CARD_S + END_XFADE:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[card];"
         f"[main][card]xfade=transition=fade:duration={END_XFADE}:offset={main_len - END_XFADE:.3f}[vout]"
     )
     af, alabel = _audio_graph(has_voice, has_music, total, tempo, safe)
