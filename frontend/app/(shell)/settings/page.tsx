@@ -143,7 +143,7 @@ function BudgetCard({ owner }: { owner: boolean }) {
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-3xl uppercase tracking-wide kitchen:text-2xl kitchen:normal-case">{t.settings.budget}</h2>
+        <h2 className="font-display text-3xl uppercase tracking-wide">{t.settings.budget}</h2>
         {u && <Badge tone={u.free_mode ? "info" : "gold"}>{u.free_mode ? t.settings.freeMode : "Veo enabled"}</Badge>}
       </div>
       {usage.error && <ErrorCallout error={usage.error} onRetry={() => usage.mutate()} />}
@@ -235,7 +235,7 @@ function YouTubeCard({ owner, restaurant }: { owner: boolean; restaurant?: Resta
   return (
     <Card className="p-5">
       <div id="youtube" className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-3xl uppercase tracking-wide kitchen:text-2xl kitchen:normal-case">{t.settings.youtube}</h2>
+        <h2 className="font-display text-3xl uppercase tracking-wide">{t.settings.youtube}</h2>
         {restaurant && <Badge tone={restaurant.youtube_connected ? "ok" : "neutral"}>{restaurant.youtube_connected ? "Connected" : "Not connected"}</Badge>}
       </div>
       {restaurant?.youtube_connected ? (
@@ -337,7 +337,7 @@ function BrandCard({ owner }: { owner: boolean }) {
 
   return (
     <Card className="p-5">
-      <h2 className="mb-4 font-display text-3xl uppercase tracking-wide kitchen:text-2xl kitchen:normal-case">{t.settings.brand}</h2>
+      <h2 className="mb-4 font-display text-3xl uppercase tracking-wide">{t.settings.brand}</h2>
       <CaptionPreview name={form.name ?? ""} primary={form.color_primary ?? "#C49A4A"} accent={form.color_accent ?? "#F3EBDD"} logo={r.data.logo_url} />
       <fieldset disabled={!owner} className="mt-5 space-y-4 disabled:opacity-70">
         <Field label="Restaurant name" htmlFor="rn">

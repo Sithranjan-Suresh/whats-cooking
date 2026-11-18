@@ -12,8 +12,7 @@ function bigMetric(c: InsightCard) {
 }
 
 export function InsightBoard({ cards }: { cards: InsightCard[] }) {
-  const { theme } = useTheme();
-  return theme === "studio" ? <Headshots cards={cards} /> : <SpecialsBoard cards={cards} />;
+  return <Headshots cards={cards} />;
 }
 
 // ================================================================ STUDIO: casting headshots
@@ -87,85 +86,5 @@ function Headshot({ card, lead }: { card: InsightCard; lead: boolean }) {
         ★ {a.cta}
       </Link>
     </article>
-  );
-}
-
-// ================================================================ KITCHEN: chalk specials board
-
-function SpecialsBoard({ cards }: { cards: InsightCard[] }) {
-  const reduce = useReducedMotion();
-  return (
-    <div className="chalkboard relative rounded-[10px] px-5 pb-8 pt-6 sm:px-9 sm:pt-8">
-      <div className="mb-6 flex items-baseline justify-between gap-4 border-b border-dashed border-white/20 pb-4">
-        <h2 className="chalk-text font-hand text-[44px] leading-none sm:text-[56px]">Today&apos;s Specials</h2>
-        <span className="chalk-text hidden font-hand text-2xl opacity-70 sm:block">picked by your sales ✓</span>
-      </div>
-      <ul className="grid gap-8 md:grid-cols-3 md:gap-6">
-        {cards.map((c, i) => (
-          <motion.li
-            key={c.id}
-            initial={reduce ? false : { opacity: 0, clipPath: "inset(0 100% 0 0)" }}
-            animate={{ opacity: 1, clipPath: "inset(0 0% 0 0)" }}
-            transition={{ delay: 0.15 + i * 0.25, duration: 0.9, ease: "easeOut" }}
-          >
-            <Special card={c} hot={i === 0 && c.angle === "rising"} index={i} />
-          </motion.li>
-        ))}
-      </ul>
-      {/* chalk tray */}
-      <div className="absolute -bottom-3 left-6 right-6 h-3 rounded-b-md bg-[#3a2819] shadow-[0_4px_8px_rgb(0_0_0/.5)]" aria-hidden>
-        <span className="absolute -top-1 left-10 h-2 w-8 rounded-full bg-white/90" />
-        <span className="absolute -top-1 left-24 h-2 w-5 rounded-full bg-[#f5c46b]" />
-      </div>
-    </div>
-  );
-}
-
-function Special({ card, hot, index }: { card: InsightCard; hot: boolean; index: number }) {
-  const { t } = useTheme();
-  const a = t.angle[card.angle];
-  const { big, unit } = bigMetric(card);
-  const tilt = ["-rotate-2", "rotate-1", "-rotate-1"][index % 3];
-  return (
-    <div className="group flex h-full flex-col">
-      {/* polaroid taped to the board */}
-      <div className={cx("relative mx-auto w-[82%] bg-[#fbf8f1] p-2 pb-8 shadow-[0_10px_20px_rgb(0_0_0/.45)] transition duration-300 group-hover:rotate-0 group-hover:scale-[1.03]", tilt)}>
-        <span className="absolute -top-3 left-1/2 h-6 w-20 -translate-x-1/2 rotate-[-3deg] bg-[#f3e6a9]/80 shadow-sm" aria-hidden />
-        <div className="relative aspect-[4/3] overflow-hidden bg-black">
-          {card.menu_item.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={card.menu_item.photo_url} alt={card.menu_item.name} loading="lazy" className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full place-items-center text-sm text-muted">no photo yet</div>
-          )}
-          {hot && (
-            <div className="absolute inset-x-0 bottom-0 flex justify-center gap-3" aria-hidden>
-              {[0, 1, 2].map((s) => (
-                <span key={s} className="block h-8 w-3 animate-steam rounded-full bg-white/40 blur-[3px]" style={{ animationDelay: `${s * 0.6}s` }} />
-              ))}
-            </div>
-          )}
-        </div>
-        <span className="absolute bottom-1.5 left-0 right-0 text-center font-hand text-[22px] leading-none text-ink">{card.menu_item.name}</span>
-      </div>
-      <div className="mt-5 flex items-center justify-between gap-2">
-        <span className="chalk-text font-hand text-[30px] leading-none">{a.label}</span>
-        <span className={cx("rounded-full border-2 px-2.5 py-0.5 font-hand text-xl leading-none", hot ? "border-[#ff9a6b] text-[#ffb08a]" : "border-white/50 chalk-text")}>{a.badge}</span>
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className={cx("font-hand text-[54px] font-bold leading-none", hot ? "text-[#ffb08a]" : "chalk-text")}>{big}</span>
-        <span className="chalk-text font-hand text-2xl opacity-80">{unit}</span>
-      </div>
-      <svg viewBox="0 0 200 8" className="mt-1 h-2 w-40 text-white/60" aria-hidden>
-        <path d="M2 5 C 50 1, 120 8, 198 3" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-      </svg>
-      <p className="chalk-text mt-3 flex-1 font-hand text-[23px] leading-[1.15] opacity-90">{card.reason}</p>
-      <Link
-        href={`/studio?insight=${card.id}`}
-        className="mt-5 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-[4px] bg-ember font-mono text-sm font-semibold uppercase tracking-[.2em] text-paper shadow-[0_3px_0_0_rgb(0_0_0/.6)] transition hover:brightness-110 active:translate-y-[2px] active:shadow-none"
-      >
-        🔥 {a.cta}
-      </Link>
-    </div>
   );
 }

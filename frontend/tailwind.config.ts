@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 import plugin from "tailwindcss/plugin";
 
 // Every color is a CSS variable (space-separated RGB) defined per theme in app/globals.css,
-// so the same class names re-skin between the "studio" and "kitchen" themes.
+// (the Hollywood "studio" theme).
 const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
 const config: Config = {
@@ -24,13 +24,11 @@ const config: Config = {
         ongold: v("ongold"),
         paper: v("paper"),
         ink: v("ink"),
-        chalk: v("chalk"),
       },
       fontFamily: {
         display: ["var(--font-display)", "sans-serif"],
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
-        hand: ["var(--font-hand)", "cursive"],
       },
       borderRadius: { xl: "var(--radius)" },
       boxShadow: {
@@ -49,9 +47,6 @@ const config: Config = {
           "60%": { transform: "translate(-2%,-1%)" },
           "80%": { transform: "translate(3%,3%)" },
         },
-        flame: { "0%,100%": { transform: "scaleY(1) translateY(0)" }, "50%": { transform: "scaleY(1.18) translateY(-2px)" } },
-        steam: { "0%": { transform: "translateY(6px) scaleX(1)", opacity: "0" }, "40%": { opacity: ".55" }, "100%": { transform: "translateY(-26px) scaleX(1.4)", opacity: "0" } },
-        swing: { "0%,100%": { transform: "rotate(-1.2deg)" }, "50%": { transform: "rotate(1.2deg)" } },
       },
       animation: {
         shimmer: "shimmer 1.4s infinite",
@@ -59,16 +54,12 @@ const config: Config = {
         fadeup: "fadeup .45s cubic-bezier(.2,.7,.2,1) both",
         flicker: "flicker 4s infinite",
         grain: "grain .9s steps(4) infinite",
-        flame: "flame .35s ease-in-out infinite",
-        steam: "steam 2.6s ease-out infinite",
-        swing: "swing 5s ease-in-out infinite",
       },
     },
   },
   plugins: [
     plugin(({ addVariant }) => {
       addVariant("studio", '[data-theme="studio"] &');
-      addVariant("kitchen", '[data-theme="kitchen"] &');
     }),
   ],
 };

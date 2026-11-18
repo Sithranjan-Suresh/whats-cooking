@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { defaultTheme, themeBootScript } from "@/lib/theme-boot";
 import "./globals.css";
 
 // Bundled (SIL OFL) so builds never depend on fetching Google Fonts.
@@ -11,16 +10,6 @@ const courier = localFont({
     { path: "./fonts/courier-prime-700.woff2", weight: "700" },
   ],
   variable: "--f-courier",
-  display: "swap",
-});
-const alfa = localFont({ src: "./fonts/alfa-slab-one.woff2", weight: "400", variable: "--f-alfa", display: "swap" });
-const caveat = localFont({ src: "./fonts/caveat.woff2", weight: "400 700", variable: "--f-caveat", display: "swap" });
-const plex = localFont({
-  src: [
-    { path: "./fonts/plex-mono-400.woff2", weight: "400" },
-    { path: "./fonts/plex-mono-600.woff2", weight: "600" },
-  ],
-  variable: "--f-plex",
   display: "swap",
 });
 const archivo = localFont({ src: "./fonts/archivo.woff2", weight: "100 900", variable: "--f-archivo", display: "swap" });
@@ -43,12 +32,9 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const fonts = [bebas, courier, alfa, caveat, plex, archivo].map((f) => f.variable).join(" ");
+  const fonts = [bebas, courier, archivo].map((f) => f.variable).join(" ");
   return (
-    <html lang="en" data-theme={defaultTheme()} className={fonts} suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript(defaultTheme()) }} />
-      </head>
+    <html lang="en" data-theme="studio" className={fonts}>
       <body className="min-h-screen font-sans">{children}</body>
     </html>
   );

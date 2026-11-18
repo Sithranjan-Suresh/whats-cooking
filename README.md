@@ -9,12 +9,16 @@ render), and publishes it to the restaurant's YouTube channel. The owner sets a 
 > Rebuild of LLMSoftware × UT Dallas Hackathon (Nov 2026) Team 6 "AI Video Marketing" (Special Recognition).
 > The hackathon version faked the videos; this one generates them for real.
 
-| Pillar | Page | Job |
+**Every dish is a star.** The app is themed as a movie studio: sales data holds the casting call, the dish photo becomes the star, and the Short premieres on YouTube.
+
+| Pillar | Page (in the app) | Job |
 |---|---|---|
-| Insights | `/insights` | Sales CSV → Rising / Top seller / Slow mover picks with plain-English reasons → **Make video** |
-| Studio | `/studio` | One dish → one finished 9:16 Short (Analyze → Script → Visuals → Voice → Assemble) |
-| Library | `/library` | Every video, download, one-click YouTube publish |
-| Brand & Budget | `/settings` | Brand kit on every render, Veo usage meter, daily clip limit, monthly cap, free mode |
+| Insights | **Casting** `/insights` | Sales CSV → Rising star / Box-office hit / Hidden talent picks with plain-English reasons → **Cast as lead** |
+| Studio | **On Set** `/studio` | One dish → one finished 9:16 Short. Clapperboard **Action!** → Read-through → Script → Lights · Camera → Voice → Final Cut, then a curtain reveal |
+| Library | **Screening Room** `/library` | Poster wall of every Short, download, one-click YouTube **premiere** |
+| Brand & Budget | **Production Office** `/settings` | Studio logo and titles on every render, production budget meter, daily Veo limit, monthly cap, **Indie mode** (free) |
+
+![Casting](docs/design/final-insights.png)
 
 ## Architecture
 

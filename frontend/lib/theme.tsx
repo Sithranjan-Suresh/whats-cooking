@@ -2,9 +2,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Angle, StageName } from "./types";
 
-import { defaultTheme, THEME_KEY as KEY, type ThemeName } from "./theme-boot";
-export type { ThemeName };
-export const THEMES: ThemeName[] = ["studio", "kitchen"];
 
 // ---------------------------------------------------------------- copy
 
@@ -24,7 +21,7 @@ type Copy = {
   toast: { done: string; failed: string; publishing: string };
 };
 
-export const COPY: Record<ThemeName, Copy> = {
+export const COPY: { studio: Copy } = {
   studio: {
     brandTag: "Every dish is a star",
     nav: { insights: "Casting", studio: "On Set", library: "Screening Room", settings: "Production Office", settingsShort: "Office" },
@@ -88,97 +85,22 @@ export const COPY: Record<ThemeName, Copy> = {
     },
     toast: { done: "That's a wrap. Your Short is ready.", failed: "Cut! The take failed.", publishing: "Premiere started" },
   },
-  kitchen: {
-    brandTag: "Order up!",
-    nav: { insights: "Specials", studio: "The Line", library: "The Pass", settings: "Back Office", settingsShort: "Office" },
-    insights: {
-      title: "What to push tonight",
-      eyebrow: "Chalked from your sales",
-      sub: (rows, range) => `${rows} tickets read · ${range}`,
-      empty: "Board's blank",
-      cta: "Fire it",
-      refresh: "Re-chalk the board",
-    },
-    angle: {
-      rising: { label: "On fire", cta: "Fire it", badge: "Hot" },
-      top_seller: { label: "House favorite", cta: "Fire it", badge: "#1" },
-      slow_mover: { label: "Chef's pick", cta: "Push it", badge: "Sleeper" },
-    },
-    studio: {
-      title: "The Line",
-      eyebrow: "One ticket · one Short",
-      sub: "Put the ticket in. Fire. Plate it.",
-      generate: "Fire!",
-      generating: "On the line…",
-      again: "New ticket",
-      tabs: { photo: "Snap a plate", insight: "From specials", menu: "From the menu" },
-      veo: "Live motion (Veo)",
-      veoOn: "Turns the plate photo into 8 seconds of real motion. If Veo can't, the line keeps cooking for free.",
-      scriptTitle: "The ticket",
-      voiceover: "Expo call-out",
-      working: "Cooking",
-      ready: "Order up!",
-      placeholder: "Plates up here",
-    },
-    stages: {
-      analyze: { title: "Prep", sub: "Reads the plate against your menu" },
-      script: { title: "Cook", sub: "Hook, captions and call-out from the menu" },
-      visuals: { title: "Plate", sub: "AI motion or slow pan" },
-      voice: { title: "Garnish", sub: "Voiceover on top" },
-      assemble: { title: "Serve", sub: "Captions, music, end card" },
-    },
-    library: {
-      title: "The Pass",
-      eyebrow: "Under the heat lamps",
-      sub: (n) => `${n} plate${n === 1 ? "" : "s"} up`,
-      empty: "Nothing on the pass",
-      emptyBody: "Fire your first ticket on the line. It lands here, ready to run.",
-      publish: "Run it to YouTube",
-      published: "Served",
-      publishing: "Running it out",
-      live: "Served on YouTube",
-    },
-    settings: {
-      title: "Back Office",
-      eyebrow: "The bill · the house style · delivery",
-      sub: "Every plate on-brand, every dollar on the receipt.",
-      budget: "The bill",
-      freeMode: "Staff meal mode",
-      freeModeSub: "No Veo. Every plate uses the free camera, $0 on the bill.",
-      brand: "House style",
-      youtube: "Delivery",
-      perVideo: (c) => `This plate cost ${c}`,
-    },
-    toast: { done: "Order up! Your Short is ready.", failed: "86'd. That ticket failed.", publishing: "Running it to YouTube" },
-  },
 };
 
 // ---------------------------------------------------------------- context
 
-type Ctx = { theme: ThemeName; setTheme: (t: ThemeName) => void; t: Copy; sound: boolean; setSound: (v: boolean) => void };
-const ThemeCtx = createContext<Ctx>({ theme: "studio", setTheme: () => {}, t: COPY.studio, sound: true, setSound: () => {} });
+type Ctx = { t: Copy; sound: boolean; setSound: (v: boolean) => void };
+const ThemeCtx = createContext<Ctx>({ t: COPY.studio, sound: true, setSound: () => {} });
 export const useTheme = () => useContext(ThemeCtx);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeName>(defaultTheme());
   const [sound, setSoundState] = useState(true);
   useEffect(() => {
-    const cur = document.documentElement.dataset.theme;
-    if (cur === "studio" || cur === "kitchen") setThemeState(cur);
     try {
       setSoundState(localStorage.getItem("wc_sound") !== "off");
     } catch {
       /* ignore */
     }
-  }, []);
-  const setTheme = useCallback((t: ThemeName) => {
-    document.documentElement.dataset.theme = t;
-    try {
-      localStorage.setItem(KEY, t);
-    } catch {
-      /* ignore */
-    }
-    setThemeState(t);
   }, []);
   const setSound = useCallback((v: boolean) => {
     setSoundState(v);
@@ -188,5 +110,5 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, []);
-  return <ThemeCtx.Provider value={{ theme, setTheme, t: COPY[theme], sound, setSound }}>{children}</ThemeCtx.Provider>;
+  return <ThemeCtx.Provider value={{ t: COPY.studio, sound, setSound }}>{children}</ThemeCtx.Provider>;
 }

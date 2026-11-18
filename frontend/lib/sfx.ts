@@ -48,55 +48,6 @@ export function clap() {
   o.stop(t + 0.12);
 }
 
-/** Service bell: bright metallic ding. */
-export function bell() {
-  const c = ac();
-  if (!c) return;
-  const t = c.currentTime;
-  const partials = [
-    [1760, 0.25, 1.6],
-    [2637, 0.12, 1.1],
-    [3520, 0.06, 0.8],
-    [4435, 0.04, 0.5],
-  ];
-  for (const [f, v, dur] of partials) {
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = "sine";
-    o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(v, t + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(c.destination);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-}
-
-/** Gas burner whoosh for "Fire!". */
-export function whoosh() {
-  const c = ac();
-  if (!c) return;
-  const t = c.currentTime;
-  const len = Math.floor(c.sampleRate * 0.6);
-  const buf = c.createBuffer(1, len, c.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  const lp = c.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.setValueAtTime(300, t);
-  lp.frequency.exponentialRampToValueAtTime(2400, t + 0.18);
-  lp.frequency.exponentialRampToValueAtTime(500, t + 0.6);
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.5, t + 0.08);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-  src.connect(lp).connect(g).connect(c.destination);
-  src.start(t);
-}
-
 /** Short fanfare sting for a premiere. */
 export function fanfare() {
   const c = ac();

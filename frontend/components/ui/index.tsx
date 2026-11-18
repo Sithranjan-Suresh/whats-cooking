@@ -19,8 +19,8 @@ export function Button({
     "disabled:opacity-45 disabled:cursor-not-allowed active:scale-[.98]";
   const v = {
     primary:
-      "bg-gold text-ongold hover:bg-gold2 studio:shadow-[0_0_0_1px_rgb(var(--gold2)/.6),0_8px_30px_-8px_rgb(var(--gold)/.6)] kitchen:font-mono kitchen:uppercase kitchen:tracking-wider kitchen:shadow-[0_3px_0_0_rgb(0_0_0/.55)] kitchen:active:translate-y-[2px] kitchen:active:shadow-none",
-    ghost: "border border-line text-cream hover:border-gold/60 hover:bg-panel2 kitchen:font-mono kitchen:uppercase kitchen:tracking-wider kitchen:text-[12px]",
+      "bg-gold text-ongold hover:bg-gold2 studio:shadow-[0_0_0_1px_rgb(var(--gold2)/.6),0_8px_30px_-8px_rgb(var(--gold)/.6)]",
+    ghost: "border border-line text-cream hover:border-gold/60 hover:bg-panel2",
     danger: "border border-bad/50 text-bad hover:bg-bad/10",
     subtle: "text-muted hover:text-cream",
   }[variant];
@@ -51,11 +51,11 @@ export function SectionTitle({ title, sub, right, eyebrow }: { title: string; su
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         {eyebrow && (
-          <div className="mb-2 flex items-center gap-2 font-mono text-[12px] uppercase tracking-[.28em] text-gold studio:before:content-['★'] kitchen:inline-flex kitchen:-rotate-1 kitchen:rounded-[3px] kitchen:border-2 kitchen:border-ember kitchen:px-2 kitchen:py-0.5 kitchen:text-ember kitchen:tracking-[.18em]">
+          <div className="mb-2 flex items-center gap-2 font-mono text-[12px] uppercase tracking-[.28em] text-gold studio:before:content-['★']">
             {eyebrow}
           </div>
         )}
-        <h1 className="font-display uppercase leading-[.85] text-cream studio:text-[64px] studio:tracking-[.02em] studio:[text-shadow:0_2px_30px_rgb(var(--ember)/.6)] sm:studio:text-[88px] kitchen:text-[40px] kitchen:normal-case kitchen:leading-[1] sm:kitchen:text-[54px]">
+        <h1 className="font-display uppercase leading-[.85] text-cream studio:text-[64px] studio:tracking-[.02em] studio:[text-shadow:0_2px_30px_rgb(var(--ember)/.6)] sm:studio:text-[88px]">
           {title}
         </h1>
         {sub && <p className="mt-3 max-w-xl text-[15px] text-muted">{sub}</p>}

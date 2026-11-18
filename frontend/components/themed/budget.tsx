@@ -4,14 +4,13 @@ import { cx, money } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import type { Usage } from "@/lib/types";
 
-export function BudgetSummary({ u, restaurant }: { u: Usage; restaurant?: string }) {
-  const { theme, t } = useTheme();
+export function BudgetSummary({ u }: { u: Usage; restaurant?: string }) {
+  const { t } = useTheme();
   const clipPct = u.today.limit > 0 ? Math.min(100, (u.today.clips / u.today.limit) * 100) : 100;
   const spendPct = u.month.cap_cents > 0 ? Math.min(100, (u.month.est_cents / u.month.cap_cents) * 100) : 100;
   const perClip = u.cost_per_sec_cents * 8;
 
-  if (theme === "studio") {
-    return (
+  return (
       <div className="grid gap-4 sm:grid-cols-2">
         {[
           { k: "Shoot days · Veo takes today", v: `${u.today.clips}`, of: `/ ${u.today.limit}`, pct: clipPct, over: u.today.clips >= u.today.limit },
@@ -42,50 +41,4 @@ export function BudgetSummary({ u, restaurant }: { u: Usage; restaurant?: string
         </div>
       </div>
     );
-  }
-
-  // kitchen: thermal receipt
-  const line = (k: string, v: string, strong?: boolean) => (
-    <div className={cx("flex justify-between gap-3", strong && "font-semibold")}>
-      <span>{k}</span>
-      <span className="border-b border-dotted border-ink/25 flex-1" />
-      <span>{v}</span>
-    </div>
-  );
-  return (
-    <motion.div
-      initial={{ clipPath: "inset(0 0 100% 0)" }}
-      animate={{ clipPath: "inset(0 0 0% 0)" }}
-      transition={{ duration: 1, ease: "easeOut" }}
-      className="ticket ticket-zigzag mx-auto max-w-md rounded-t-[2px] px-6 pt-5 font-mono text-[13px] text-ink shadow-lift"
-    >
-      <div className="text-center">
-        <div className="font-display text-2xl">{restaurant ?? "The kitchen"}</div>
-        <div className="text-[11px] uppercase tracking-[.3em] text-ink/55">AI spend · this month</div>
-      </div>
-      <div className="my-3 border-t-2 border-dashed border-ink/35" />
-      {line("Veo plates today", `${u.today.clips} / ${u.today.limit}`)}
-      <Bar pct={clipPct} over={u.today.clips >= u.today.limit} />
-      {line("Month to date", money(u.month.est_cents))}
-      {line("House cap", money(u.month.cap_cents))}
-      <Bar pct={spendPct} over={u.month.est_cents >= u.month.cap_cents} />
-      <div className="my-3 border-t-2 border-dashed border-ink/35" />
-      {line("1× Veo plate (8s)", money(perClip))}
-      {line("1× Staff meal (free)", "$0.00")}
-      <div className="my-3 border-t-2 border-double border-ink/50" />
-      {line("Left to spend", money(Math.max(0, u.month.cap_cents - u.month.est_cents)), true)}
-      <div className="mt-4 text-center font-hand text-2xl text-ember">never over the cap ✓</div>
-      <div className="mt-1 text-center text-[10px] uppercase tracking-[.3em] text-ink/45">thank you · come again</div>
-    </motion.div>
-  );
-}
-
-function Bar({ pct, over }: { pct: number; over: boolean }) {
-  return (
-    <div className="my-1.5 font-mono text-[12px] tracking-[-.05em] text-ink/80" aria-hidden>
-      [{"█".repeat(Math.round(pct / 5))}
-      <span className="text-ink/25">{"░".repeat(20 - Math.round(pct / 5))}</span>]{" "}
-      <span className={cx(over && "font-semibold text-ember")}>{Math.round(pct)}%</span>
-    </div>
-  );
 }

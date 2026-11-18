@@ -28,7 +28,7 @@ function Studio() {
   const router = useRouter();
   const toast = useToast();
   const owner = useIsOwner();
-  const { t, theme } = useTheme();
+  const { t } = useTheme();
   const usage = useUsage();
   const menuQ = useSWR<MenuItem[], ApiError>("/menu", fetcher);
   const menu = menuQ.data ?? [];
@@ -377,7 +377,7 @@ function Studio() {
                   <>
                     {job.menu_item && (
                       <div className="mb-4 flex items-center gap-2">
-                        <span className={cx("text-cream", theme === "studio" ? "font-display text-[30px] uppercase tracking-[.04em]" : "font-display text-2xl")}>{job.menu_item.name}</span>
+                        <span className="font-display text-[30px] uppercase tracking-[.04em] text-cream">{job.menu_item.name}</span>
                         {job.angle && <Badge tone="gold">{ANGLE_LABEL[job.angle]}</Badge>}
                       </div>
                     )}
@@ -405,8 +405,8 @@ function Studio() {
           {job?.status === "done" && job.video && (
             <div className="mx-auto mt-4 max-w-[320px] space-y-2">
               <div className="flex items-center justify-center gap-2 text-xs text-muted">
-                <Badge tone={job.veo_used ? "gold" : "neutral"}>{job.veo_used ? "Veo" : theme === "studio" ? "Free rig" : "Free"}</Badge>
-                <span className="font-mono">{theme === "studio" ? `Cost to make: ${money(job.cost_cents)}` : `On the bill: ${money(job.cost_cents)}`}</span>
+                <Badge tone={job.veo_used ? "gold" : "neutral"}>{job.veo_used ? "Veo" : "Free rig"}</Badge>
+                <span className="font-mono">{`Cost to make: ${money(job.cost_cents)}`}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <a
@@ -423,7 +423,7 @@ function Studio() {
                   Edit captions &amp; re-render
                 </button>
                 <Link href={`/library?video=${job.video.id}`} className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gold text-sm font-semibold text-ongold hover:bg-gold2">
-                  {owner ? (theme === "studio" ? "Premiere →" : "Run it →") : `${t.nav.library} →`}
+                  {owner ? "Premiere →" : `${t.nav.library} →`}
                 </Link>
               </div>
             </div>

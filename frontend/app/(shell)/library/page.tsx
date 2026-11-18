@@ -9,9 +9,9 @@ import type { Job, Privacy, Restaurant, Video } from "@/lib/types";
 import { useIsOwner } from "@/hooks/data";
 import { Badge, Button, EmptyState, ErrorCallout, Field, inputCls, Modal, SectionTitle, Skeleton, Spinner, useToast } from "@/components/ui";
 import { PhonePlayer } from "@/components/studio";
-import { Celebration, TileCls, VideoTileThemed } from "@/components/themed/library";
+import { Celebration, tileGrid, VideoTileThemed } from "@/components/themed/library";
 import { useTheme } from "@/lib/theme";
-import { fanfare, bell } from "@/lib/sfx";
+import { fanfare } from "@/lib/sfx";
 
 export default function LibraryPage() {
   return (
@@ -34,7 +34,7 @@ function Library() {
   const restaurant = useSWR<Restaurant, ApiError>("/restaurants/me", fetcher);
   const [openId, setOpenId] = useState<number | null>(params.get("video") ? Number(params.get("video")) : null);
   const [prevActive, setPrevActive] = useState(0);
-  const { t, theme, sound } = useTheme();
+  const { t, sound } = useTheme();
   const [celebrate, setCelebrate] = useState(false);
   const [prevStatus, setPrevStatus] = useState<Record<number, string>>({});
 
@@ -50,7 +50,7 @@ function Library() {
     setPrevStatus(next);
     if (fire) {
       setCelebrate(true);
-      if (sound) (theme === "studio" ? fanfare : bell)();
+      if (sound) fanfare();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videos.data]);
@@ -106,7 +106,7 @@ function Library() {
               }
             />
           ) : (
-            <div className={TileCls(theme)}>
+            <div className={tileGrid}>
               {(active.data ?? []).map((j) => (
                 <ActiveTile key={`j${j.id}`} job={j} />
               ))}
