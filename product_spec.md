@@ -1,4 +1,4 @@
-# ReelMenu — Product Spec
+# What's Cooking? — Product Spec
 
 ## 1. Requirements at Submission
 1. A first-time viewer opens the public URL on a phone with no login and lands on a seeded demo restaurant (Kumar's).

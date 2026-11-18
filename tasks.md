@@ -1,0 +1,254 @@
+# What's Cooking? — Implementation Task List (Phase 8)
+
+Single global checklist. Completing every task = production-ready submission.
+**Owners:** [S] Sith (`backend/**`, `eval/**`, `seed/**`) · [A] Anish (`frontend/**`) · [B] both / humans (`CLAUDE.md`, `contract.md`, README, deploy).
+**Priority:** P0 = demo-blocking · P1 = depth/polish · P2 = extras.
+**Checkpoints:** CP1 = free-mode core loop works live · CP2 = every pillar on real data, eval result in, outsider test, hero Veo cached · CP3 = deployed, phone-tested, rehearsed.
+**Rule:** all P0s before any P1s; deployment starts early (Section 3).
+
+---
+
+## Section 0 — Day-0 Risk Retirement (do before building; these can invalidate the plan)
+
+- [ ] **1. [S][P0] Verify Gemini text model ID.** Call `models.list` with the API key; pick the current Flash model that supports image input + structured JSON output; record the exact ID as `GEMINI_TEXT_MODEL` in `.env.example` and a scratch note.
+- [ ] **2. [S][P0] Verify Veo image-to-video model ID and pricing.** From `models.list` and the pricing page, pick the Lite/Fast Veo variant that supports image input, 9:16, 720p, 8s. Record `VEO_MODEL` and compute `VEO_COST_PER_SEC_CENTS` (target ≤ $0.70 per 8s clip). Note if Veo 3.1 is deprecated (engineering spec flags Oct 22, 2026) and pick the replacement.
+- [ ] **3. [S][P0] Run one real 8-second Veo test clip** from a single dish photo. Record wall-clock latency, output format/resolution/aspect, and whether audio is included. Repeat up to 5 times if budget allows to estimate p90 latency (decides whether live Veo demo is viable or `DEMO_CACHE` is the primary path).
+- [ ] **4. [S][P0] Set up the 3-layer cost cap before the first paid call beyond task 3:** (1) prepay Gemini API credits with auto-reload OFF, (2) set the AI Studio project monthly spend cap ~20% below the real limit, (3) screenshot both settings for the README. Document the ~10-minute billing lag.
+- [ ] **5. [S][P0] Test YouTube upload without audit.** Create Google Cloud project, enable YouTube Data API v3, create OAuth web client (scopes `youtube.upload`, `youtube.readonly`), add yourselves as test users, upload one throwaway video, read back `status.privacyStatus`. Record the result (expected: `private`) — this drives the info-note UX.
+- [ ] **6. [S][P0] Smoke-test edge-tts and gTTS** from a Python shell: synthesize one sentence each, confirm WordBoundary timings from edge-tts, confirm gTTS fallback works with no timings.
+- [ ] **7. [S][P0] Smoke-test ffmpeg locally:** confirm `zoompan`, `xfade`, `subtitles` (libass), `sidechaincompress` filters exist (`ffmpeg -filters`). Confirm Oswald/Inter TTFs render through libass.
+- [ ] **8. [B][P0] Obtain/confirm assets:** Kumar's menu data (~20 items), 8 real dish photos (JPG, ≥1080px on the short side), logo PNG (transparent), royalty-free `music_upbeat.mp3` (license noted in README).
+
+---
+
+## Section 1 — Repo, Contract & Scaffolding (Checkpoint 0)
+
+- [ ] **9. [S][P0] Create repo skeleton:** `/backend /frontend /eval /seed` + `CLAUDE.md`, `contract.md`, `README.md`, `Makefile`, `.gitignore` (ignore `data/`, `.env`, `node_modules`, `__pycache__`, `.next`), `.env.example` with every variable from engineering spec §5.5.
+- [ ] **10. [B][P0] Write `CLAUDE.md`:** project summary, ownership rules (§Ownership), "never edit the other person's directory", "`contract.md` changes need both humans and a `CONTRACT:` commit prefix", run commands, mock-vs-live switches.
+- [ ] **11. [B][P0] Write `contract.md`:** paste the full API table from engineering spec §3, the error shape `{"error":{"code","message","retryable"}}`, the `needs_dish` job status, `stages_json` shape, `GET /health` shape, auth rules (`X-Owner-Token`, `DEMO_MODE`), and example JSON for every endpoint response. Both humans sign off in one commit prefixed `CONTRACT:`.
+- [ ] **12. [S][P0] Write `Makefile`:** `make back` (uvicorn reload), `make front` (next dev), `make seed` (run `seed.py`), `make eval` (run `eval/run_eval.py`), `make test` (pytest).
+- [ ] **13. [S][P0] Backend project setup:** `backend/pyproject.toml` or `requirements.txt` (fastapi, uvicorn, sqlmodel, pydantic, google-genai, edge-tts, gTTS, rapidfuzz, python-multipart, pillow, google-auth-oauthlib, google-api-python-client, cryptography, pytest, httpx). Create `backend/app/` with `main.py`, `config.py` (reads `.env` via pydantic-settings), `db.py`, `models.py`, `errors.py`, `routers/`, `services/`.
+- [ ] **14. [S][P0] Config module:** typed settings for every env var (`GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `VEO_MODEL`, `VEO_COST_PER_SEC_CENTS`, OAuth vars, `APP_SECRET`, `OWNER_TOKEN`, `DEMO_MODE`, `MOCK_PIPELINE`, `DEMO_CACHE`, `MOCK_FAIL_RATE`, `FRONTEND_ORIGIN`, `DATA_DIR`).
+- [ ] **15. [S][P0] Global error handling:** custom `AppError(code, message, retryable, status)` + exception handlers so every error returns the contract shape; handler for validation errors and unhandled exceptions (log + generic `internal_error`).
+- [ ] **16. [S][P0] CORS + media serving:** CORS allowing `FRONTEND_ORIGIN` (and localhost:3000 in dev); mount `data/media` at `/media/*`; ensure subdirs `assets, clips, audio, videos, posters` are created on startup.
+- [ ] **17. [S][P0] Auth dependency:** `X-Owner-Token` check vs `OWNER_TOKEN`; `get_actor()` returns `owner` or `demo`; if no valid token and `DEMO_MODE=1` → `demo` (read-only, Veo forced off, publish → 403 `demo_mode`); if no token and demo off → 401.
+- [ ] **18. [S][P0] `GET /health`:** returns `{ok, mock, demo, veo_model, gemini_model}`.
+
+## Section 2 — Database Schema & Models
+
+- [ ] **19. [S][P0] SQLModel tables:** `Restaurant, MenuItem, Asset, SalesRecord, Insight, Job, Video, UsageLedger, Settings, YouTubeAuth` exactly per engineering spec §2.1 (all fields, types, nullable markers, FKs). JSON columns (`stages_json, analyze_json, script_json, metric_json`) stored as text with helper (de)serializers.
+- [ ] **20. [S][P0] DB bootstrap:** SQLite at `data/app.db`, `create_all()` on startup, WAL mode, `busy_timeout`, session dependency. Add indexes: `SalesRecord(restaurant_id,date)`, `UsageLedger(restaurant_id,date,state)`, `Video(restaurant_id,created_at)`, `MenuItem(restaurant_id,name_norm)`.
+- [ ] **21. [S][P0] Name normalization util** (`normalize_name`): lowercase, strip punctuation, strip size words ("lg", "large", "small", "regular"), collapse whitespace. Unit-test with 10 examples.
+- [ ] **22. [S][P0] Single-restaurant resolution:** helper `current_restaurant()` returning the one seeded restaurant (app is single-owner); used by every router.
+- [ ] **23. [S][P0] Fernet helper:** `encrypt/decrypt` using `APP_SECRET`; unit test round-trip.
+
+## Section 3 — Early Deployment (don't leave to last hour)
+
+- [ ] **24. [S][P0] Backend Dockerfile:** `python:3.12-slim`, `apt-get install ffmpeg` + fontconfig, copy `backend/assets/fonts` (Oswald, Inter TTFs) and run `fc-cache`, install deps, `CMD uvicorn`, expose port, healthcheck on `/health`.
+- [ ] **25. [S][P0] Deploy backend (stub) to Render/Railway/Fly** with a persistent volume mounted at `/app/data`; set all env vars; confirm `/health` returns `ok:true` on the public URL.
+- [ ] **26. [S][P0] Verify ffmpeg + libass fonts inside the deployed container:** temporary debug endpoint or shell command rendering one subtitle line to a PNG; delete the endpoint after.
+- [ ] **27. [A][P0] Create Next.js app** (App Router, TypeScript, Tailwind) in `/frontend`; deploy empty shell to Vercel; set `NEXT_PUBLIC_API_URL`; confirm it loads on a phone and can fetch `/health` (CORS verified).
+
+## Section 4 — Mock Pipeline & Seed Data (unblocks Anish)
+
+- [ ] **28. [S][P0] Seed files:** `seed/kumars_menu.csv` (~20 items, columns `name,price,description,category`, ≥1 item with null price for edge case), 8 dish photos incl. biryani, `kumars_sales_8w.csv` (8 weeks; biryani ≈ +30% WoW with ≥10 units this week; a clear top seller; a clear slow mover with a photo), logo, `music_upbeat.mp3`.
+- [ ] **29. [S][P0] Produce `seed/mock_short.mp4`** (720×1280, ≤ 8 MB, any representative render) and `seed/mock_insights.json` matching the `/insights` contract.
+- [ ] **30. [S][P0] `seed.py`:** idempotent; creates Kumar's restaurant (brand colors gold/dark green, voice tone upbeat, tts voice), imports menu, copies photos to `data/media/assets` creating `Asset` rows and linking `photo_asset_id`, imports sales, creates `Settings` defaults (daily limit 10, cap 1500¢, free_mode false, cost 8¢/s), seeds 2–3 historical `Video` rows (one with `youtube_url` and `publish_status=published`).
+- [ ] **31. [S][P0] Stub every contract endpoint** in routers returning contract-shaped data (from seed/mock). Includes all rows of the §3 API table.
+- [ ] **32. [S][P0] `MOCK_PIPELINE=1` job runner:** `POST /jobs` returns 202 `{job_id}`; background task walks stages analyze 1.5s → script 3s (writes `script_json`) → visuals 6s (12s if `veo`) → voice 1.5s → assemble 2s; attaches `seed/mock_short.mp4` as a Video. Include `MOCK_FAIL_RATE` random stage failure.
+- [ ] **33. [S][P0] Mock `needs_dish` path:** when mock job is created with `mode=photo` and no menu item and env flag `MOCK_NEEDS_DISH=1`, pause at analyze with `needs_dish` and resume via `/jobs/{id}/confirm-dish`.
+- [ ] **34. [S][P0] Redeploy backend with mock mode on** so Anish can build against the live URL; tell Anish in chat.
+
+## Section 5 — Frontend Foundation (Anish, parallel with Sections 6–8)
+
+- [ ] **35. [A][P0] Tailwind design tokens** per §2.4: colors (`bg, panel, line, gold, cream, muted, ok, bad`), fonts via `next/font` (Oswald → `display`, Inter → `sans`, JetBrains Mono → `mono`), `rounded-xl` 16px, `shadow-glow`. Set page background/text defaults.
+- [ ] **36. [A][P0] UI kit** in `components/ui/`: `Card, Button (primary gold / ghost / danger), Badge, Toggle, Meter, StatTile, Modal, Skeleton, ErrorCallout (with Retry)`. Each with disabled/loading states.
+- [ ] **37. [A][P0] `lib/types.ts`** mirroring `contract.md` (Restaurant, MenuItem, Insight card, Job, Stage, Script, Video, Usage, Settings, ApiError).
+- [ ] **38. [A][P0] `lib/api.ts`:** typed fetch wrapper using `NEXT_PUBLIC_API_URL`, injects `X-Owner-Token` from localStorage, parses the error shape into a typed `ApiError` (code/message/retryable), handles network failure as retryable error.
+- [ ] **39. [A][P0] Shell layout `app/(shell)/layout.tsx`:** desktop sidebar (≥768px) with What's Cooking? wordmark + Insights/Studio/Library/Brand & Budget; mobile bottom tab bar (4 tabs); `DemoBanner` (visible when `/health.demo` and no owner token); toaster.
+- [ ] **40. [A][P0] `/` redirect:** server/client check `GET /insights`; cards → `/insights`, else `/studio`.
+- [ ] **41. [A][P0] `useJob(id)` hook:** polls `/jobs/{id}` every 1.5s until `done|failed|needs_dish`; exposes `{job, error, isPolling}`; cleans up on unmount; keeps polling continuity if user returns.
+- [ ] **42. [A][P0] `useUsage()` hook:** SWR on `/usage`, exposes `revalidate()` to call after each job.
+- [ ] **43. [A][P0] Global loading/error/empty conventions:** every data fetch uses Skeleton while loading, ErrorCallout with Retry when `retryable`, and a defined empty state. Add a small `Fetch<T>` wrapper component to enforce this.
+
+## Section 6 — Frontend Pages Against Mocks
+
+- [ ] **44. [A][P0] Insights page** (`/insights`): `SalesUpload` (drag/drop CSV, shows rows/dropped/date range/unmatched list after upload), `InsightCard` ×3 (angle badge, item name+photo, metric string like "+32% WoW · 84 sold", reason, **Make video**), `EmptyState` with "Download sample CSV" link, skeletons, error state.
+- [ ] **45. [A][P0] Insights "Make video" navigation** → `/studio?insight=<id>`.
+- [ ] **46. [A][P0] Studio page layout** (`/studio`): `InputPicker` tabs (Photo | From insight | From menu), `OptionsBar`, `GenerateButton`, results area with `StageStepper` + `ScriptPanel` + `PhonePlayer`. Query params `insight` and `item` are the source of truth for pre-fill.
+- [ ] **47. [A][P0] Photo upload in Studio:** accepts JPG/PNG/WEBP ≤ 10 MB client-side validated; inline error "Use a JPG or PNG under 10 MB."; preview thumbnail; `POST /uploads`.
+- [ ] **48. [A][P0] Menu item picker** (for "From menu" and for photo mode manual select): searchable list from `GET /menu` with photo thumbnails.
+- [ ] **49. [A][P0] Pre-fill from insight:** resolve insight → dish, photo, angle chip shown ("Angle: Rising"); if dish has no photo, prompt for upload with dish already selected.
+- [ ] **50. [A][P0] `OptionsBar`:** style select (Bold enabled; Warm/Minimal disabled with "soon" tag in P0), length (15s enabled; 30s P1), `VeoToggle` with live cost estimate ("≈ $0.64" = 8 × cost-per-sec from `/usage`), disabled with reason when daily limit/monthly cap/free mode/demo mode.
+- [ ] **51. [A][P0] `StageStepper`:** 5 rows (Analyze, Script, Visuals, Voice, Assemble) with spinner/check/✕/skip per stage, elapsed time per stage, note text, `fallback_reason` badge on Visuals ("Free mode (Veo unavailable)").
+- [ ] **52. [A][P0] `ScriptPanel`:** fills when script stage completes: hook, caption beats with "from menu: price/name/description" chips (from `facts_used`), voiceover text, title, description, hashtags. Skeleton before it arrives.
+- [ ] **53. [A][P0] `PhonePlayer`:** 9:16 frame, `<video playsInline muted autoPlay loop poster>`, tap-to-unmute overlay, gold glow, Download button using `download` attribute, lazy-load with poster.
+- [ ] **54. [A][P0] `DishPickerModal`** for `needs_dish`: shows top-3 menu matches with photos + "Not on menu"; calls `POST /jobs/{id}/confirm-dish`; resumes polling.
+- [ ] **55. [A][P0] Studio failure states:** failed job shows the stage, error message, **Retry** (re-POST /jobs with same inputs), not-food warning ("This doesn't look like a dish photo. Try another?" + "Continue anyway"), never a blank screen or endless spinner (cap polling UI at 5 min with a timeout message).
+- [ ] **56. [A][P0] "Leave and come back" behavior:** persist last `job_id` in localStorage/URL (`?job=`) so returning to Studio resumes the stepper; Library shows in-progress jobs (see task 61).
+- [ ] **57. [A][P0] Library page** (`/library`): `VideoGrid` newest first; `VideoTile` with lazy poster, dish name, date, mode badge (Veo/Free), cost, status badge (Draft/Published/Failed); click opens modal player; Download.
+- [ ] **58. [A][P0] `PublishDialog`:** pre-filled title/description/hashtags from script (editable), privacy select (Private default, Unlisted, Public), progress state, success state "Published ↗" with link + the privacy YouTube actually returned, info note for restricted/private, quotaExceeded message, Retry on failure; disabled with explanation in demo mode.
+- [ ] **59. [A][P0] "Connect YouTube" CTA** in Library when not connected → links to `/settings`.
+- [ ] **60. [A][P0] Library empty state** (no videos → CTA to Studio) and error/skeleton states.
+- [ ] **61. [A][P0] Library in-progress tiles:** jobs with status queued/running appear as tiles with live stage progress (needs a `/jobs` list or `/videos` to include in-progress; coordinate via `contract.md` change task 62).
+- [ ] **62. [B][P0] CONTRACT change (if needed):** add `GET /jobs?status=active` (or include in-progress items in `GET /videos`) for task 61; commit `CONTRACT:` with both approvals.
+- [ ] **63. [A][P0] Settings page** (`/settings`): `BrandForm` (name, logo upload PNG, primary/accent color pickers, voice tone Friendly/Upbeat/Elegant, TTS voice select) with live `CaptionPreview` (sample caption styled in brand colors/font); `PATCH /restaurants/me`.
+- [ ] **64. [A][P0] Settings: `BudgetMeter` + `LimitsForm` + `FreeModeToggle`:** today clips used/limit, month est $/cap, cost per Veo second, edit daily limit (0–50) and monthly cap ($0–$100), toggle free mode; `PATCH /settings`; meters turn `bad` red when at limit.
+- [ ] **65. [A][P0] Settings: `YouTubeConnect`:** shows channel title if connected, "Connect YouTube" button → `/youtube/auth/start`, handles `?youtube=connected` toast.
+- [ ] **66. [A][P0] Owner unlock flow:** one-time field in `/settings` to enter `OWNER_TOKEN`, stored in localStorage; changes banner state; "Lock" button clears it.
+- [ ] **67. [A][P0] Demo-mode UI rules:** with no owner token + demo: Veo toggle disabled with "Demo mode: Veo reserved for the presenter", publish buttons disabled, seeded published videos show links, banner visible.
+- [ ] **68. [A][P0] Mobile pass on all 4 pages** at 375px width: no horizontal scroll, tap targets ≥ 44px, bottom tab bar not overlapping content, player fits viewport.
+- [ ] **69. [A][P0] Wire pages to live mock backend** (Section 4's deployed URL); fix contract mismatches by raising `CONTRACT:` changes, not local hacks.
+
+## Section 7 — Backend: Core Services (free-mode loop → CP1)
+
+- [ ] **70. [S][P0] Uploads router (`POST /uploads`):** accept multipart `file`+`kind`; reject >10 MB or mime not in JPG/PNG/WEBP (logo: PNG) with error codes `file_too_large`/`bad_mime`; read dims with Pillow, strip EXIF orientation properly (apply rotation), save to `data/media/assets/<uuid>.<ext>`, create `Asset`, return `{asset_id,url,width,height}`.
+- [ ] **71. [S][P0] Menu router:** `POST /menu/import` (CSV `name,price,description,category`; parse price strings like "$12.99" to cents; blank price → null; skip empty names; return `{imported, skipped}`), `GET /menu` (with `photo_url`), `POST /menu/{id}/photo` (links asset).
+- [ ] **72. [S][P0] Restaurants router:** `GET /restaurants/me` (+ `menu_count`, `has_sales`, `youtube_connected`), `PATCH /restaurants/me` (partial brand fields; validate hex colors, tone enum).
+- [ ] **73. [S][P0] `gemini.py` client wrapper:** one `google-genai` client, timeout handling, 429 backoff, structured-output (response schema) helper `generate_json(prompt, schema, image=None)` returning parsed object or raising typed `GeminiError(kind: timeout|rate_limit|malformed|blocked)`.
+- [ ] **74. [S][P0] `analyze_photo`:** inputs photo + menu list (name, price, description, cap 150); structured output `{is_food, dish_guess, menu_item_id, confidence, visual_notes, quality}`; 20s timeout → retry once → raise; JSON repair retry; 429 → wait 5s retry ×2.
+- [ ] **75. [S][P0] Analyze behavior rules:** `mode=insight|menu` → skip match, only produce `visual_notes`; confidence < 0.6 or `menu_item_id` null → job status `needs_dish` with top-3 candidates stored in `analyze_json`; `is_food=false` or low quality → store warning flag (frontend shows warning, user may continue).
+- [ ] **76. [S][P0] `POST /jobs/{id}/confirm-dish`:** accepts `menu_item_id|null`; null → set "not on menu" flag so script omits price; resume job from script stage; reject if job not in `needs_dish`.
+- [ ] **77. [S][P0] `write_script` prompt + schema:** system prompt with hard rules (only name/price/description from MENU_ROW; never invent discounts/awards/health/allergen claims/prices; omit price if null); inputs menu row verbatim, angle, voice tone, length, visual_notes, restaurant name; output schema per §5.1 (hook ≤8 words, beats with ≤22 chars/line ≤2 lines and `seconds`, voiceover ≤38/75 words, `veo_prompt`, title ≤70, description, hashtags ≤5, `facts_used`).
+- [ ] **78. [S][P0] Script angle → hook mapping:** `top_seller` ("everyone's ordering"), `rising` ("back by demand"), `slow_mover` ("underrated gem") — phrased without inventing facts; metrics can be referenced only if they're real (e.g., rising % from the insight).
+- [ ] **79. [S][P0] Script post-validation:** every `$` amount in captions/voiceover equals menu price; dish name present (normalized); beats' total seconds within ±1s of length; trim/validate hashtag count. On failure → one repair retry → `template_script(menu_row, angle)`.
+- [ ] **80. [S][P0] `template_script`:** deterministic fallback built from menu fields (hook "Try the {name}", beats with name/price/description snippets, voiceover assembled from fields, generic hashtags, `veo_prompt` = slow steam/camera push on the dish) — passes its own validator.
+- [ ] **81. [S][P0] `tts.py`:** `synthesize(text, voice, out_path)` → edge-tts mp3 + word timings (list of `{word,start,end}`); 15s timeout; retry once; fallback to gTTS (no timings); returns `{path, duration_s, timings|None, engine}`; zero-length audio → fallback; empty voiceover → return None (captions-only).
+- [ ] **82. [S][P0] `render.kenburns(photo, length_s)`:** produce 2–3 crops (e.g., center, upper-left, lower-right) of the photo, each with slow zoom/pan via ffmpeg `zoompan` at 30fps, rendered at 1080×1920 and scaled to 720×1280; crossfade (`xfade`) between segments; output intermediate mp4. Handle landscape photos (crop to 9:16 with face/center bias) and tiny photos (upscale).
+- [ ] **83. [S][P0] `render.build_ass`:** generate `.ass` from beats + timings: brand primary/accent colors, Oswald Bold, centered lower third, ≤2 lines/22 chars, auto-shrink font for long dish names, pop-in (scale+fade) per beat; fall back to even split by `seconds` when no word timings.
+- [ ] **84. [S][P0] `render.end_card`:** 1.5s card on brand primary color with logo + restaurant name + price (omit price if null); built as an ffmpeg lavfi/overlay segment.
+- [ ] **85. [S][P0] `render.assemble`:** single ffmpeg graph: visuals + subtitles burn-in + voiceover + music at −18 dB ducked via `sidechaincompress` + end card; encode H.264 `-preset veryfast -crf 23`, AAC 128k, `-movflags +faststart`; 90s timeout via `asyncio.create_subprocess_exec`; non-zero exit → log stderr tail → retry once with safe preset (`-preset ultrafast`, no sidechain); missing music → skip music input; captions-only when no voice. Verify output ≤ 10 MB at 15s, 720×1280.
+- [ ] **86. [S][P0] Poster extraction:** frame at t=1.0s to `data/media/posters/<video>.jpg`; compute duration/bytes with `ffprobe`.
+- [ ] **87. [S][P0] `queue.py`:** `asyncio.Queue` + 2 workers started on app startup; job stage state machine writing `stages_json` transitions (pending → running → done/failed/skipped with timestamps and notes); graceful handling of worker exceptions (mark job failed with stage + error); on app restart, mark orphaned `running` jobs as `failed (server_restarted)`.
+- [ ] **88. [S][P0] Stage runners wired into the machine** analyze → [needs_dish] → script → visuals (free path only for now) → voice → assemble → create `Video` row, set `Job.cost_cents`, `status=done`, `finished_at`.
+- [ ] **89. [S][P0] `POST /jobs`:** validate payload by mode (`photo` needs `photo_asset_id`; `insight` needs `insight_id` and resolves menu item + photo + angle; `menu` needs `menu_item_id` with a photo); in demo mode force `veo=false`; return 202 `{job_id}`; enqueue.
+- [ ] **90. [S][P0] `GET /jobs/{id}`:** full status shape (stages, analyze, script, veo_used, fallback_reason, video `{id,url,poster_url}`, cost_cents, error); 404 handling.
+- [ ] **91. [S][P0] Videos router:** `GET /videos`, `GET /videos/{id}` (include dish name, mode, cost, publish fields, poster URL).
+- [ ] **92. [S][P0] Real-run smoke test with 3 photos** (biryani + 2 others) through `MOCK_PIPELINE=0`: check render time < 45s on local machine, captions correct, audio audible, end card present, file ≤ 10 MB. Fix issues.
+- [ ] **93. [S][P0] Unit/integration tests (pytest):** normalize_name, script validator (rejects wrong price, accepts correct), template_script validity, CSV menu import edge cases, upload rejection cases, job state machine with fake gemini/tts/ffmpeg.
+- [ ] **94. [S][P0] Deploy live-mode backend (free mode)**; run one end-to-end job on the deployed host; record render time. Check disk persistence across a redeploy.
+- [ ] **95. [A][P0] Switch frontend to live backend** (no code change; just `NEXT_PUBLIC_API_URL`); run the core loop (photo → Short) on a phone.
+- [ ] **96. [B][P0] ★ CHECKPOINT 1:** core loop works live end to end in free mode on the deployed URL, 0 crashes across 5 consecutive runs. If not, stop and fix before anything else.
+
+## Section 8 — Eval Harness (the technical claim)
+
+- [ ] **97. [S][P0] Build `eval/cases.json`:** 12 photo cases (`photo`, `menu_row{name,price,description}`, `expected{name,price}`) covering varied dishes, ≥1 null-price case, ≥1 long name; 8 sales cases (`csv_slice`, `expected_top_seller`, `expected_rising`).
+- [ ] **98. [S][P0] Baseline generator:** same Gemini model, photo only, prompt "write a short promo script for this dish" — no menu row, no rules; returns voiceover + captions text.
+- [ ] **99. [S][P0] Grounded generator:** call the production `write_script` path (including validation + repair) with each case's menu row.
+- [ ] **100. [S][P0] Scoring functions:** `name_ok` (normalized name in voiceover/captions), `price_ok` (every `$x.xx` equals menu price; none mentioned when price null; invented price fails), `no_invented_claims` (regex `%|off|discount|award|best in|gluten|vegan|allergen|healthy` not in the menu description + LLM-judge yes/no), `pass = all three`.
+- [ ] **101. [S][P0] Sales scoring:** run `insights.py` ranking on each CSV slice, compare picks to expected.
+- [ ] **102. [S][P0] `run_eval.py` output:** per-case table (case, baseline pass/fail+reason, grounded pass/fail+reason), summary line `grounded X/20 · baseline Y/20 · sales picks Z/8`, written to `eval/results.md`; deterministic (temperature low, seeds noted); rate-limit-safe (sleep/backoff).
+- [ ] **103. [S][P0] Run the eval and inspect failures;** if grounded < 19/20, fix prompt/validator (not the cases) and rerun; commit `eval/results.md`. Record the real baseline number for the demo script blank.
+- [ ] **104. [S][P0] Budget-guard visible test** (see Section 10) wired into `make test` so the "blocks 11th clip" claim is demonstrable.
+
+## Section 9 — Insights Pillar
+
+- [ ] **105. [S][P0] CSV parser for sales:** column alias mapping (`date|Date|order_date|business_date`, `item_name|Item|item|menu_item|Item Name`, `quantity|Qty|qty|count|Quantity Sold`, `revenue|Net Sales|net_sales|amount`); mixed date formats; drop empty/invalid rows and negative quantities (refunds) with a `dropped` count; parse revenue to cents.
+- [ ] **106. [S][P0] Menu matching for sales rows:** exact → normalized → `rapidfuzz` ratio ≥ 85; set `menu_item_id`; collect `unmatched_items` list (distinct raw names).
+- [ ] **107. [S][P0] `POST /sales/import`:** replaces/appends sales (decide: replace for the single restaurant, documented in contract), returns `{rows, dropped, date_from, date_to, unmatched_items}`; invalidates existing insights.
+- [ ] **108. [S][P0] `insights.py` ranking (pure Python):** windows anchored to the max date in the data; Top seller = max `qty_7d`; Rising = max `wow_pct` among items with `qty_7d ≥ 10` and `qty_prev ≥ 3`; Slow mover = min `qty_14d` among items with a photo, excluding other picks; <14 days of data → Top seller only; always return distinct items.
+- [ ] **109. [S][P0] Insight reasons:** one Gemini call returns three one-sentence reasons given metrics (must only use provided numbers); on failure/timeout (20s) → rule-based templates ("Up 32% vs last week with 84 sold."); store `reason_source`.
+- [ ] **110. [S][P0] `GET /insights` and `POST /insights/refresh`:** return `{batch_id, cards:[...]}` per contract; persist `Insight` rows with `batch_id`; `GET` returns the latest batch, computing on first call; in mock mode serve `seed/mock_insights.json`.
+- [ ] **111. [S][P0] Insights unit tests:** seeded CSV yields biryani as Rising with ≈ +30%, expected Top seller and Slow mover; edge cases (<14 days, refunds, aliases, unmatched).
+- [ ] **112. [S][P0] Insight → Job path:** `POST /jobs {mode:"insight", insight_id}` resolves item/photo/angle (backend side of cross-link 1); angle flows into `write_script`; test with seeded insight.
+- [ ] **113. [A][P0] Connect Insights page to live data;** verify upload of the seeded CSV, an alias-header CSV, and a bad CSV (clear error).
+- [ ] **114. [A][P0] Verify Make video → Studio pre-fill → Generate** works end to end with live data (the signature moment).
+
+## Section 10 — Budget Guard & Veo
+
+- [ ] **115. [S][P0] `budget.py`:** `reserve_veo(restaurant, job, seconds)`, `commit(job)`, `release(job)` per §5.2; all checks + insert in one SQLite transaction (`BEGIN IMMEDIATE`); deny reasons `free_mode|daily_limit|monthly_cap|demo_mode`; month computed from ledger date; est cents = seconds × `veo_cost_per_sec_cents`.
+- [ ] **116. [S][P0] Budget tests:** with limit 10 the 11th reserve is denied; monthly cap denies when `month + est > cap`; released rows don't count; two concurrent reservations at limit-1 → exactly one wins (threaded test); free_mode denies.
+- [ ] **117. [S][P0] `GET /usage` and `PATCH /settings`:** usage shape per contract; settings validation (limit 0–50, cap 0–10000¢, bool free_mode); demo mode may not PATCH (403).
+- [ ] **118. [S][P0] `veo.py` `generate_clip`:** submit image-to-video (photo + `veo_prompt`, aspect 9:16, 8s, 720p, `VEO_MODEL`); poll long-running op every 5s up to 180s; download MP4; validate non-empty/decodable via ffprobe; raise typed `VeoError(kind: timeout|blocked|api|corrupt|rate_limit)`.
+- [ ] **119. [S][P0] Visuals stage Veo branch:** if `veo_requested && !demo && budget.reserve_veo(...)` allow → run Veo → success → commit ledger + record `cost_cents`; any failure → release ledger → free Ken Burns path with `fallback_reason` (`veo_timeout|veo_blocked|veo_error|daily_limit|monthly_cap|free_mode|demo_mode`) and stage note.
+- [ ] **120. [S][P0] Veo + tail composition:** 8s Veo clip + 7s Ken Burns tail (same photo) crossfaded for 15s videos (and 8s + 22s tail for 30s); normalize Veo clip to 720×1280, 30fps; handle Veo audio by dropping it.
+- [ ] **121. [S][P0] Veo prompt quality pass:** craft `veo_prompt` guidance in the script prompt (subtle steam, slow push-in, no text overlays, no people/hands to avoid safety blocks); test on 3 dishes and pick the best template.
+- [ ] **122. [S][P0] Real paid Veo end-to-end test** through the pipeline (one job); confirm cost recorded equals reserved estimate; confirm usage meter increments.
+- [ ] **123. [S][P0] Failure drills:** (a) force Veo timeout via env override → falls back, ledger released, badge shown; (b) kill network to Veo → falls back; (c) hit daily limit → falls back with reason.
+- [ ] **124. [A][P0] Wire Veo toggle + usage meter to live data;** verify the toggle disables with the correct reason in each denied state and the stepper shows the fallback badge.
+- [ ] **125. [S][P0] `DEMO_CACHE` hero render:** generate the biryani Veo Short once for real; save to `seed/hero_veo_short.mp4` (+ poster); implement `DEMO_CACHE=1` so a Veo job for the seeded biryani item runs the mock timeline then returns the cached video and a plausible cost entry without a paid call (flag it internally, never claim live in the UI copy beyond normal behavior).
+- [ ] **126. [S][P0] Poll mock timeline for cached path:** realistic stage times (~8s total) with script content from the cached run so the script panel is real.
+
+## Section 11 — YouTube Publishing
+
+- [ ] **127. [S][P0] OAuth start/callback:** `/youtube/auth/start` builds the consent URL (`access_type=offline`, `prompt=consent`, scopes upload+readonly, signed `state`); `/youtube/auth/callback` exchanges code, fetches channel id/title via `channels.list(mine=true)`, encrypts and stores refresh token, redirects to `/settings?youtube=connected`; on failure redirect with `?youtube=error`.
+- [ ] **128. [S][P0] Token refresh:** build credentials from the stored refresh token on demand; auto-refresh; if refresh fails mark disconnected and return `youtube_reconnect_required` (non-retryable).
+- [ ] **129. [S][P0] `youtube.upload`:** `videos().insert(part="snippet,status", media_body=MediaFileUpload(resumable=True, chunksize=8MB))`; category 26; description + hashtags with `#Shorts`; privacy from request; progress callback; retry ×3 with backoff on transient errors.
+- [ ] **130. [S][P0] `POST /videos/{id}/publish`:** 202 `{publish_status:"publishing"}`; background upload; on success store `youtube_id`, `youtube_url`, read back actual `status.privacyStatus` into `youtube_privacy`, `publish_status=published`; on failure `failed` with error code; map `quotaExceeded` → "Daily YouTube upload limit reached, try tomorrow"; block in demo mode (403 `demo_mode`); not-connected → 409 `youtube_not_connected`.
+- [ ] **131. [S][P0] Publish failure-path tests** with a mocked YouTube client: expired token, interrupted upload, quota exceeded, missing video ID.
+- [ ] **132. [S][P0] Fallback for demo:** if publish fails in demo-cache path, the seeded biryani Video has a pre-set `youtube_url` of a real pre-uploaded video; document how to publish it once on the team channel and paste the URL into `seed.py`.
+- [ ] **133. [S][P0] Real publish test from the deployed backend** (not just local): connect the team YouTube channel, publish the hero video, open on a phone, note actual privacy; set the seeded `youtube_url`.
+- [ ] **134. [A][P0] Wire Library publish + Settings connect to live backend;** verify polling to `published`, link opens, restricted note shows when `youtube_privacy` is private/unlisted.
+- [ ] **135. [S][P0] OAuth consent screen config** in Google Cloud (app name What's Cooking?, logo, privacy/TOS URLs placeholder pages, test users added); redirect URI = deployed backend callback URL.
+
+## Section 12 — Brand Application
+
+- [ ] **136. [S][P0] Apply brand kit in render:** caption primary/accent colors, end-card background/logo/name, TTS voice from `Restaurant.tts_voice`, voice tone into the script prompt; test with two different brand kits and confirm visible differences.
+- [ ] **137. [S][P0] Logo handling:** transparent PNG scaled to fit end card; fallback to name-only end card if no logo.
+- [ ] **138. [A][P0] Caption preview in Settings** must visually match the render (same colors, bold Oswald, positioning); adjust until a side-by-side check looks equivalent.
+
+## Section 13 — Checkpoint 2 Gate
+
+- [ ] **139. [B][P0] End-to-end full demo path on the deployed URL:** Insights → Make video → Studio (Veo on, presenter token) → stages → Short → Publish → open YouTube on phone → Library → Settings meter → free mode flip → same dish in free mode.
+- [ ] **140. [S][P0] Measure and record metrics:** free-mode render time (< 45s), Veo mode p90 (< 150s), cost per Veo video, 0 crashes across 10 runs on the demo path. Put in README.
+- [ ] **141. [B][P0] Outsider test:** one person who has never seen it completes the core loop on the public URL on a phone in < 2 minutes with no help; log where they hesitated; fix top 3 friction points.
+- [ ] **142. [B][P0] ★ CHECKPOINT 2:** every pillar works on real data, eval result committed, outsider test passed, hero Veo cached, YouTube link real. Cut per the cut order if anything is red.
+
+## Section 14 — Polish & Hardening (P1, only after Checkpoint 2)
+
+- [ ] **143. [A][P1] Stage transitions & motion:** animated check marks, script lines streaming/fading in, button press states, skeleton shimmer, smooth page transitions; respect `prefers-reduced-motion`.
+- [ ] **144. [A][P1] Player polish:** poster-first loading, gold glow only while playing, unmute affordance animation, graceful video load error.
+- [ ] **145. [A][P1] Typography/spacing audit** on every page: Oswald for headings/numbers, JetBrains Mono for cost/usage figures, consistent 8px grid, contrast ≥ 4.5:1 for body text on `panel`.
+- [ ] **146. [A][P1] Toasts for all async outcomes** (upload done, job done, published, errors).
+- [ ] **147. [A][P1] Performance:** JS ≤ 250 KB gzipped per route (check `next build` output), lazy-load PublishDialog/Modal, `next/image` for posters, verify FCP ≤ 1.5s on throttled 4G in Lighthouse.
+- [ ] **148. [A][P1] Accessibility basics:** keyboard focus rings, `aria-live` on stepper, labelled form fields, alt text, video controls reachable.
+- [ ] **149. [S][P1] S5 styles:** Warm and Minimal ASS templates + pacing (durations, font size, positions) + prompt tone variants; enable in the UI (Anish task 150 pairs).
+- [ ] **150. [A][P1] Enable Warm/Minimal in OptionsBar** once backend supports them.
+- [ ] **151. [S][P1] 30s length support:** script budgets (75 words, beat seconds), Veo 8s + 22s tail, music loop/trim; verify ≤ 20 MB or compress; enable in the UI.
+- [ ] **152. [A][P1] Enable 30s option** and show estimated render time.
+- [ ] **153. [S][P1] Regenerate a single beat:** endpoint to regenerate one caption beat (re-validate, re-render only assemble); [A] "Regenerate" button on a beat in `ScriptPanel`.
+- [ ] **154. [A][P1] Publish dialog edit polish:** character counters (title ≤ 70), hashtag chips editor, privacy explainer.
+- [ ] **155. [S][P1] Unmatched-item mapping UI support:** `PATCH` endpoint mapping a raw item name to a menu item; [A] small mapping UI in Insights listing unmatched items.
+- [ ] **156. [S][P1] Per-video cost receipt:** Gemini calls (token estimates), Veo seconds × rate, total; [A] show in Library tile detail.
+- [ ] **157. [S][P1] Logging & observability:** structured logs per job (job id, stage, durations, fallback reasons), ffmpeg stderr tail on failure, request IDs in error responses.
+- [ ] **158. [S][P1] Cleanup & limits:** cap upload storage (delete orphaned assets/old clips > N days), simple rate limit on `POST /jobs` per IP in demo mode to protect the free Gemini tier.
+- [ ] **159. [S][P1] Gemini caching:** cache analyze/script by `(photo hash, menu row hash, angle, tone, length)` to reduce free-tier calls during rehearsals.
+- [ ] **160. [S][P1] Security pass:** no secrets in repo, `.env` ignored, CORS locked to frontend origin, upload type/size checks, path traversal check on media routes, refresh token encrypted, `OWNER_TOKEN` compared in constant time.
+- [ ] **161. [B][P1] Stretch eval:** expand to 40–50 cases, add second baseline (menu text but no structured output/validation), add failure-case table to `eval/results.md`.
+- [ ] **162. [B][P1] Real evidence:** show a generated Short to 3–5 restaurant owners/staff, log reactions in `docs/feedback.md`; find one sourced statistic on short-form video and restaurant discovery for the pitch.
+- [ ] **163. [S][P2] YouTube view counts → Insights** (`videos.list` statistics → `Video.views`; show on insight cards) — the Library → Insights cross-link.
+- [ ] **164. [S][P2] Scheduling, multiple music tracks, day/time sales patterns, Instagram/TikTok** — leave out unless everything above is done.
+
+## Section 15 — Documentation
+
+- [ ] **165. [B][P0] README:** what it is, screenshots/GIF, architecture diagram (from §1), setup steps (backend, frontend, env vars, `make` targets), mock vs live switches, demo mode vs owner token.
+- [ ] **166. [B][P0] README cost-control section:** all 3 layers (prepaid credits auto-reload off, AI Studio monthly cap ~20% below limit, in-code `UsageLedger` guard) + billing-lag note + screenshots.
+- [ ] **167. [B][P0] README "How we used AI" section:** Gemini (vision, structured script, insight reasons), Veo (image-to-video), Claude Code in building, edge-tts; what's grounded vs generated; the eval result.
+- [ ] **168. [B][P0] README honest-limits section:** unaudited YouTube app keeps uploads private; free-tier data caveat; edge-tts unofficial; CSV aliases tested against which exports; Veo model deprecation note.
+- [ ] **169. [B][P0] Commit `eval/results.md` and link it in the README;** include one-line pitch result.
+- [ ] **170. [B][P0] Music/photo licensing notes** in README.
+
+## Section 16 — Final Deployment & Demo Readiness (CP3)
+
+- [ ] **171. [S][P0] Production env review:** all variables set on host (including `DEMO_MODE=1`, `DEMO_CACHE=1`, `MOCK_PIPELINE=0`, `MOCK_FAIL_RATE=0`), `OWNER_TOKEN` stored in password manager, `APP_SECRET` generated and backed up, persistent volume verified, redeploy doesn't wipe data.
+- [ ] **172. [S][P0] Run `seed.py` on production** and verify Kumar's loads: menu, photos, sales, brand kit, 2–3 seeded videos (one with real YouTube link), hero cache present.
+- [ ] **173. [A][P0] Production frontend:** correct `NEXT_PUBLIC_API_URL`, no console errors, favicon + title "What's Cooking?", OG image/meta so a shared link looks right.
+- [ ] **174. [B][P0] "Submitted and running" checklist** (each verified on the public URL from a phone, not your laptop): (a) loads Kumar's with no login, (b) a free-mode job completes live, (c) `DEMO_CACHE` hero Veo job plays, (d) ≥1 video published on the team's YouTube channel with the link shown, (e) `eval/results.md` committed, (f) README complete.
+- [ ] **175. [B][P0] Cold-start/uptime check:** if the host sleeps on idle (free tiers), set up a keep-alive ping or upgrade the plan for the demo window; load `/health` 5 minutes before presenting.
+- [ ] **176. [B][P0] Backup plan:** screen-record a perfect full demo run (with audio) and keep it locally and on the phone; save direct links to the hero video and published YouTube video; keep local `make back`/`make front` ready on a laptop.
+- [ ] **177. [B][P0] Budget safety before demo day:** confirm ledger shows current daily limit headroom, credits balance is sufficient, AI Studio cap in place; set daily limit to a low number for the presenter session.
+
+## Section 17 — Demo Rehearsal (CP3)
+
+- [ ] **178. [B][P0] Fill the blanks in the demo script** (`demo_design.md` §8): real baseline score (`__/20`), actual cost (e.g., 64¢), actual WoW % and units from seeded data, real elapsed times. Update the file.
+- [ ] **179. [B][P0] Prepare the eval proof visual:** one slide or in-app panel showing `grounded 20/20 · baseline Y/20` with one concrete baseline failure example (wrong/invented price or claim) vs. the grounded output.
+- [ ] **180. [B][P0] Rehearse the 90-second script ≥ 5 times** with a timer; assign who clicks and who talks; mark exact stage timings; rehearse the "let it play 6 seconds of silence" beat and the phone-hold moment.
+- [ ] **181. [B][P0] Rehearse failure recovery:** Veo slow → switch to cache narration; publish fails → show seeded link; Wi-Fi drops → play backup recording; know the one-line cover for each.
+- [ ] **182. [B][P0] Prepare a Q&A sheet:** cost per video and caps, how grounding is enforced and measured, YouTube audit limits, how it plugs into Toast/Square/Clover, what happens if Veo fails, privacy of sales data (free-tier caveat), differentiator vs LLMSoftware's own menu-to-video feature.
+- [ ] **183. [B][P0] Final phone run on cellular data** of the full demo path, twice, on the exact device/browser to be used; fix anything flaky.
+- [ ] **184. [B][P0] ★ CHECKPOINT 3 / SUBMIT:** freeze code (tag `v1.0`), re-run the §174 checklist, submit the URL, repo, and demo video/backup per the event instructions.
+
+## Section 18 — Post-Demo Follow-up (P1)
+
+- [ ] **185. [B][P1] Send LLMSoftware a follow-up** with the live URL, eval result, a 30-second screen recording, and an offer to walk through plugging it in as a module (stated goal: "LLMSoftware asks for a follow-up call").
+- [ ] **186. [B][P1] Capture lessons and next steps** (POS connectors, multi-platform autopilot, performance loop) in `docs/roadmap.md` from the Future Expansion section.

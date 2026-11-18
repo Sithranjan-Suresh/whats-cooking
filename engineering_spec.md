@@ -1,4 +1,4 @@
-# ReelMenu — Engineering Spec
+# What's Cooking? — Engineering Spec
 
 Design only, no code. An engineer, or a Claude Code session, should be able to build from this without making major design decisions.
 

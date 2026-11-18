@@ -1,7 +1,7 @@
-# ReelMenu — Demo Design (Phase 4)
+# What's Cooking? — Demo Design (Phase 4)
 
-> Working name: **ReelMenu** (rename freely). Rebuild of LLMSoftware x UTD Team 6 "AI Video Marketing" (Special Recognition). The hackathon version used videos made by hand in Google AI Studio; this version generates them for real.
-> Audience for the demo: LLMSoftware (Rajesh Rajaram and team), recruiters, future hackathon judges.
+> Working name: **What's Cooking?** (rename freely). Rebuild of LLMSoftware x UTD Team 6 "AI Video Marketing" (Special Recognition). The hackathon version used videos made by hand in Google AI Studio; this version generates them for real.
+> Product name: **What's Cooking?** (renamed from the earlier working name). Rebuild of LLMSoftware x UTD Team 6 "AI Video Marketing" (Special Recognition). The hackathon version used videos made by hand in Google AI Studio; this version generates them for real.
 
 ---
 
@@ -76,15 +76,15 @@ A viewer opens the deployed URL on a phone with **no login** (demo restaurant "K
 3. **Cost is known and capped:** about $0.64 per Veo video, or $0 in free mode, under a hard monthly cap.
 
 ## 8. 90-Second Demo Script (word for word; rewrite around the real numbers at Checkpoint 3)
-> **[0:00 · Insights open]** "Small restaurants know short-form video brings people in. They don't have the time or an editor, so they post nothing. ReelMenu fixes that with what they already have."
-> **[0:10 · tap the Biryani card]** "This is Kumar's real sales data. ReelMenu noticed chicken biryani is up 32% this week and suggests promoting it. One tap."
+> **[0:00 · Insights open]** "Small restaurants know short-form video brings people in. They don't have the time or an editor, so they post nothing. What's Cooking? fixes that with what they already have."
+> **[0:10 · tap the Biryani card]** "This is Kumar's real sales data. What's Cooking? noticed chicken biryani is up 32% this week and suggests promoting it. One tap."
 > **[0:18 · Studio, Generate]** "It reads the dish photo and the menu, writes a hook, captions and a voiceover, then turns this single photo into motion."
 > **[0:30 · stages ticking, script panel filling]** "Every caption comes from the real menu. No invented dishes, no wrong prices."
 > **[0:40 · video autoplays]** *(let it play 6 seconds of silence from you)*
 > **[0:48 · Publish]** "Publish." *(hold up phone)* "It's on their YouTube channel."
 > **[0:55 · eval slide/panel]** "We tested it: on 20 real menu items, grounded captions got every dish and price right. An ungrounded prompt got __ of 20."
 > **[1:05 · Library → Brand & Budget]** "Every video lives here. And cost is capped: this one cost 64 cents. Owners set a monthly cap, or flip free mode and the same video costs nothing."
-> **[1:20 · close]** "Photo or sales data in, published Short out. Built to plug into Toast, Square and Clover. That's ReelMenu."
+> **[1:20 · close]** "Photo or sales data in, published Short out. Built to plug into Toast, Square and Clover. That's What's Cooking?."
 
 ## 9. Signature Moment
 **Insights → published Short in one flow.** Sales data picks the dish, a single photo becomes motion video, and it posts to YouTube. LLMSoftware's own video product starts from a menu. Generic AI video tools (one-off prompt-to-video) don't know what's selling.
@@ -113,7 +113,7 @@ A viewer opens the deployed URL on a phone with **no login** (demo restaurant "K
 - **Load budget:** first contentful paint < 1.5s on a 4G phone, JS < 250 KB gzipped per route, videos lazy-loaded with a poster.
 
 ## 12. Technical Claim, Baseline and Eval Plan
-- **Claim:** *ReelMenu's captions and voiceover are grounded in the restaurant's real menu. Measured by the share of videos whose dish name and price are exactly correct and contain no invented claims (allergens, awards, discounts), versus a baseline prompt with only the photo and no menu grounding.*
+- **Claim:** *What's Cooking?'s captions and voiceover are grounded in the restaurant's real menu. Measured by the share of videos whose dish name and price are exactly correct and contain no invented claims (allergens, awards, discounts), versus a baseline prompt with only the photo and no menu grounding.*
 - **Eval set:** 20 labeled cases (`eval/cases.json`): 12 dish photos with their menu rows (name, price, description, category) and 8 sales scenarios (CSV slice and expected promotion pick).
 - **Scoring (`eval/run_eval.py`):**
   - For photo cases: generate the script JSON both ways and score each on dish name exact/normalized match, price exact match, and no invented claims (an LLM-judge check plus a regex for "$", "%", "award", "allergen", "gluten").

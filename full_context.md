@@ -1,18 +1,18 @@
-# ReelMenu — Full Context
+# What's Cooking? — Full Context
 
 > Read this first. It explains the whole project with no prior context. Companion files: `demo_design.md` (the demo), `product_spec.md` (what to build), `engineering_spec.md` (how to build it).
 
 ## Vision
-**One sentence:** ReelMenu turns a restaurant's dish photos and sales data into published YouTube Shorts in about a minute, with no editing and a capped cost.
+**One sentence:** What's Cooking? turns a restaurant's dish photos and sales data into published YouTube Shorts in about a minute, with no editing and a capped cost.
 
-**Paragraph:** Short-form video is now how many diners discover where to eat, but small restaurants rarely post because they have no time, no editor and no idea what to feature. ReelMenu does all three jobs. It reads the sales data to decide which dish to promote, writes a hook, captions and voiceover grounded in the real menu, turns a single dish photo into a vertical video (AI motion with Google Veo, or a free Ken Burns render), and publishes it to the restaurant's YouTube channel. The owner sets a monthly budget and the system never exceeds it.
+**Paragraph:** Short-form video is now how many diners discover where to eat, but small restaurants rarely post because they have no time, no editor and no idea what to feature. What's Cooking? does all three jobs. It reads the sales data to decide which dish to promote, writes a hook, captions and voiceover grounded in the real menu, turns a single dish photo into a vertical video (AI motion with Google Veo, or a free Ken Burns render), and publishes it to the restaurant's YouTube channel. The owner sets a monthly budget and the system never exceeds it.
 
 **Thesis:** What a restaurant already has (photos and sales data) → a published Short in about a minute, with no editing, at a known and capped cost.
 
 ## Origin
 - Built first at the **LLMSoftware x UT Dallas Hackathon** (Nov 14, 2026), Challenge: AI Video Marketing, as Team 6 (Sithranjan Suresh and Anish Javvadi). It received a **Special Recognition**: "Turning a menu and sales data into ready-to-post video content is exactly the kind of innovation restaurants need."
 - The hackathon version faked the videos (made by hand in Google AI Studio). **This rebuild generates them for real**, from scratch.
-- LLMSoftware sells an AI operating system for restaurants (AI receptionist, camera alerts, ERP, social and ads). ReelMenu is designed to work as a module they could plug in.
+- LLMSoftware sells an AI operating system for restaurants (AI receptionist, camera alerts, ERP, social and ads). What's Cooking? is designed to work as a module they could plug in.
 
 ## Problem
 - **Who:** independent and small-chain restaurant owners and managers (e.g., Kumar's, an Indian restaurant).
