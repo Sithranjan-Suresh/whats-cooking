@@ -671,6 +671,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
   return (
     <section className="mt-14">
       <Celebration show={celebrate} onDone={() => setCelebrate(false)} />
+      <YouTubeStatus r={r} ytConfigured={ytConfigured} />
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <h2 className="font-display text-[40px] uppercase leading-none tracking-[.03em] text-cream">Your videos</h2>
         <div className="flex rounded-full border border-line bg-black/40 p-0.5 text-xs font-semibold">
@@ -731,5 +732,57 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
         ))}
       </ul>
     </section>
+  );
+}
+
+function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) {
+  const restaurant = useRestaurant();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!ytConfigured) return null;
+  const connect = async () => {
+    setBusy(true);
+    try {
+      const { url } = await api<{ url: string }>("/youtube/auth/url");
+      window.location.href = url;
+    } catch (e) {
+      toast((e as Error).message, "bad");
+      setBusy(false);
+    }
+  };
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      await api("/youtube/disconnect", { method: "POST" });
+      await restaurant.mutate();
+      toast("YouTube disconnected. Connect again to pick a channel.", "info");
+    } catch (e) {
+      toast((e as Error).message, "bad");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-black/40 px-4 py-3 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="grid h-7 w-10 shrink-0 place-items-center rounded-md bg-[#ff0033] text-[11px] font-bold text-white">▶</span>
+        {r.youtube_connected ? (
+          <span className="truncate text-cream">
+            Posting to <b>{r.youtube_channel_title ?? "your channel"}</b>
+          </span>
+        ) : (
+          <span className="text-muted">YouTube not connected</span>
+        )}
+      </div>
+      {r.youtube_connected ? (
+        <Button variant="ghost" className="min-h-[36px]" onClick={disconnect} loading={busy}>
+          Switch channel
+        </Button>
+      ) : (
+        <Button className="min-h-[36px]" onClick={connect} loading={busy}>
+          Connect YouTube
+        </Button>
+      )}
+    </div>
   );
 }
