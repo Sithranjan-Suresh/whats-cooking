@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from urllib.parse import quote
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -99,7 +101,7 @@ async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_a
         raise AppError("already_publishing", "Already publishing.", 409)
     auth = session.get(YouTubeAuth, v.restaurant_id)
     if not auth:
-        raise AppError("youtube_not_connected", "Connect YouTube in Settings first.", 409)
+        raise AppError("youtube_not_connected", "Connect YouTube first.", 409)
     try:
         token = decrypt(auth.refresh_token)
     except RuntimeError as e:
@@ -162,7 +164,32 @@ def yt_callback(code: str | None = None, state: str | None = None, error: str | 
     auth.channel_title = info["channel_title"]
     session.add(auth)
     session.commit()
-    return RedirectResponse(f"{front}/?youtube=connected", status_code=302)
+    # Free hosting wipes the DB on restart, so the browser also keeps an encrypted copy (in the URL
+    # fragment, which never reaches server logs) and sends it back as X-YouTube-Auth to restore it.
+    blob = encrypt(json.dumps({"rt": info["refresh_token"], "cid": info["channel_id"], "ct": info["channel_title"]}))
+    return RedirectResponse(f"{front}/?youtube=connected#yt={quote(blob)}", status_code=302)
+
+
+@router.get("/youtube/uploads")
+async def yt_uploads(session: Session = Depends(get_session)):
+    """Upload history read live from the connected channel (survives server restarts)."""
+    r = current_restaurant(session)
+    auth = session.get(YouTubeAuth, r.id)
+    if not auth:
+        raise AppError("youtube_not_connected", "Connect YouTube first.", 409)
+    try:
+        token = decrypt(auth.refresh_token)
+        return await asyncio.to_thread(youtube.list_uploads, token)
+    except youtube.YouTubeError as e:
+        if e.code == "youtube_reconnect_required":
+            session.delete(auth)
+            session.commit()
+        raise AppError(e.code, e.message, 409) from e
+    except RuntimeError as e:
+        raise AppError("youtube_reconnect_required", "Reconnect YouTube.", 409) from e
+    except Exception as e:  # noqa: BLE001
+        log.warning("list uploads failed: %s", e)
+        raise AppError("youtube_error", "Couldn't load your YouTube videos right now.", 502, retryable=True) from e
 
 
 @router.post("/youtube/disconnect")

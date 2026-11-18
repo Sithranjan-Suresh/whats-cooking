@@ -199,3 +199,30 @@ def upload(
     if on_progress:
         on_progress(100)
     return {"id": vid, "url": f"https://youtube.com/shorts/{vid}", "privacy": privacy_back}
+
+
+def list_uploads(refresh_token: str, *, max_results: int = 25, service=None) -> dict:
+    """The connected channel's own upload history (newest first), straight from YouTube."""
+    if service is None:
+        service = _service(credentials_from_refresh(refresh_token))
+    ch = service.channels().list(part="snippet,contentDetails", mine=True).execute()
+    items = ch.get("items") or []
+    if not items:
+        return {"channel_title": None, "videos": []}
+    uploads = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+    pl = service.playlistItems().list(part="snippet,status,contentDetails", playlistId=uploads, maxResults=max_results).execute()
+    out = []
+    for it in pl.get("items", []):
+        vid = it["contentDetails"]["videoId"]
+        sn = it.get("snippet", {})
+        thumbs = sn.get("thumbnails", {})
+        thumb = (thumbs.get("medium") or thumbs.get("default") or {}).get("url")
+        out.append({
+            "id": vid,
+            "title": sn.get("title"),
+            "published_at": it["contentDetails"].get("videoPublishedAt") or sn.get("publishedAt"),
+            "thumbnail": thumb,
+            "url": f"https://youtube.com/shorts/{vid}",
+            "privacy": (it.get("status") or {}).get("privacyStatus"),
+        })
+    return {"channel_title": items[0]["snippet"]["title"], "videos": out}

@@ -26,7 +26,11 @@ Serializers: `backend/app/serializers.py`. Change this file deliberately and pre
 | No token, `DEMO_MODE=0`, `OWNER_TOKEN` set | 401 |
 | No token, no `OWNER_TOKEN` configured | owner (local dev) |
 
-The frontend stores the owner token in `localStorage` after a one-time unlock in `/settings`.
+The frontend stores the owner token in `localStorage` after a one-time unlock.
+
+**YouTube connection on free hosting:** the callback hands the browser an encrypted copy of the connection (URL fragment `#yt=…`,
+Fernet-encrypted with `APP_SECRET`). The frontend keeps it in `localStorage` and sends it on every request as
+`X-YouTube-Auth`; if the server's DB was wiped (restart/sleep), middleware silently restores the connection from it.
 
 ## Endpoints
 
@@ -55,8 +59,9 @@ The frontend stores the owner token in `localStorage` after a one-time unlock in
 | POST `/videos/{id}/publish` | owner | `{title, description, tags:[str], privacy:"private"\|"unlisted"\|"public"}` | **202** `{publish_status:"publishing"}`. Poll `/videos/{id}` (`publish_progress` 0–100) |
 | GET `/youtube/auth/url` | owner | — | `{url}` Google consent URL (frontend navigates to it) |
 | GET `/youtube/auth/start` | owner | — | 302 to Google consent (scopes `youtube.upload` + `youtube.readonly`) |
-| GET `/youtube/auth/callback` | Google | `code, state` | 302 → `{FRONTEND_ORIGIN}/settings?youtube=connected` (or `?youtube=error&reason=…`) |
-| POST `/youtube/disconnect` | owner | — | `{ok:true}` |
+| GET `/youtube/auth/callback` | Google | `code, state` | 302 → `{FRONTEND_ORIGIN}/?youtube=connected#yt=<encrypted connection>` (or `/?youtube=error&reason=…`) |
+| POST `/youtube/disconnect` | owner | — | `{ok:true}` (frontend also forgets its encrypted copy) |
+| GET `/youtube/uploads` | any | — | `{channel_title, videos:[{id, title, url, published_at, thumbnail, privacy}]}` read live from the connected channel (newest first, max 25). 409 `youtube_not_connected` |
 | GET `/usage` | any | — | `Usage` |
 | GET `/settings` | any | — | `Settings` |
 | PATCH `/settings` | owner | `{daily_veo_clip_limit? 0–50, monthly_cap_cents? 0–10000, free_mode?}` | `Settings` |

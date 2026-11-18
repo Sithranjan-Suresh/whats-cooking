@@ -271,3 +271,44 @@ def test_any_restaurant_csv_creates_dishes_and_picks_one(client):
     cards = client.get("/insights").json()["cards"]
     names = {c["angle"]: c["menu_item"]["name"] for c in cards}
     assert names["top_seller"] == "Masala Dosa"
+
+
+def test_youtube_connection_survives_db_wipe_via_browser_copy(client, monkeypatch):
+    """Callback hands the browser an encrypted copy; after the server forgets, X-YouTube-Auth restores it."""
+    from urllib.parse import unquote
+
+    from sqlmodel import Session, delete
+
+    from app.db import get_engine
+    from app.models import YouTubeAuth
+    from app.services import youtube
+
+    monkeypatch.setattr(youtube, "exchange_code", lambda code, state: {
+        "restaurant_id": 1, "refresh_token": "rt-123", "channel_id": "UC1", "channel_title": "Dosa House TV"})
+    r = client.get("/youtube/auth/callback?code=x&state=y", follow_redirects=False)
+    assert r.status_code == 302 and "youtube=connected#yt=" in r.headers["location"]
+    blob = unquote(r.headers["location"].split("#yt=", 1)[1])
+    assert "rt-123" not in blob  # encrypted
+    assert client.get("/restaurants/me").json()["youtube_channel_title"] == "Dosa House TV"
+
+    with Session(get_engine()) as s:  # simulate the free host wiping its disk
+        s.exec(delete(YouTubeAuth))
+        s.commit()
+    assert client.get("/restaurants/me").json()["youtube_connected"] is False
+    me = client.get("/restaurants/me", headers={"X-YouTube-Auth": blob}).json()
+    assert me["youtube_connected"] is True and me["youtube_channel_title"] == "Dosa House TV"
+    # garbage blobs are ignored, never errors
+    assert client.get("/health", headers={"X-YouTube-Auth": "nope"}).status_code == 200
+
+    seen = {}
+
+    def fake_list(token, max_results=25, service=None):
+        seen["token"] = token
+        return {"channel_title": "Dosa House TV", "videos": [{"id": "abc", "title": "Masala Dosa", "url": "https://youtube.com/shorts/abc",
+                                                              "published_at": "2026-11-18T00:00:00Z", "thumbnail": None, "privacy": "private"}]}
+
+    monkeypatch.setattr(youtube, "list_uploads", fake_list)
+    up = client.get("/youtube/uploads").json()
+    assert seen["token"] == "rt-123" and up["videos"][0]["id"] == "abc"
+    assert client.post("/youtube/disconnect", headers=OWNER).json() == {"ok": True}
+    assert client.get("/youtube/uploads").status_code == 409

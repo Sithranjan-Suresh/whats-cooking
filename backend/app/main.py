@@ -26,6 +26,28 @@ async def lifespan(_: FastAPI):
     await job_queue.stop()
 
 
+def _restore_youtube(blob: str) -> None:
+    """Re-create the YouTube connection from the browser's encrypted copy if the DB lost it."""
+    import json as _json
+
+    from .db import session_scope
+    from .models import Restaurant, YouTubeAuth
+    from .util import decrypt, encrypt
+    from sqlmodel import select
+
+    try:
+        data = _json.loads(decrypt(blob))
+    except Exception:  # noqa: BLE001  (bad/old blob: ignore)
+        return
+    with session_scope() as s:
+        r = s.exec(select(Restaurant).order_by(Restaurant.id)).first()
+        if r is None or s.get(YouTubeAuth, r.id) is not None:
+            return
+        s.add(YouTubeAuth(restaurant_id=r.id, refresh_token=encrypt(data["rt"]), channel_id=data.get("cid"),
+                          channel_title=data.get("ct")))
+        s.commit()
+
+
 def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(title="What's Cooking? API", version="1.0.0", lifespan=lifespan)
@@ -38,6 +60,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_error_handlers(app)
+
+    @app.middleware("http")
+    async def youtube_restore(request, call_next):
+        blob = request.headers.get("x-youtube-auth")
+        if blob and request.url.path not in ("/youtube/disconnect",):
+            try:
+                _restore_youtube(blob)
+            except Exception:  # noqa: BLE001
+                pass
+        return await call_next(request)
     for r in (core.router, insights.router, jobs.router, videos.router):
         app.include_router(r)
     ensure_dirs()

@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { api, fetcher, ApiError } from "@/lib/api";
+import { api, fetcher, setYtBlob, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
 import type { InsightCard, InsightsResponse, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
@@ -48,10 +48,15 @@ function App() {
     } catch {
       /* ignore */
     }
+    const hash = window.location.hash;
+    if (hash.startsWith("#yt=")) {
+      setYtBlob(decodeURIComponent(hash.slice(4)));
+      restaurant.mutate();
+    }
     const yt = params.get("youtube");
     if (yt === "connected") toast("YouTube connected. Hit Post to YouTube.", "ok");
     if (yt === "error") toast(`YouTube connection failed (${params.get("reason") ?? "unknown"})`, "bad");
-    if (yt) window.history.replaceState(null, "", "/");
+    if (yt || hash) window.history.replaceState(null, "", "/");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -665,8 +670,13 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
     }
   }, [videos.data, sound]);
   const [filter, setFilter] = useState<"all" | "posted">("all");
-  const list = (videos.data ?? []).filter((v) => filter === "all" || v.youtube_url);
-  const postedCount = (videos.data ?? []).filter((v) => v.youtube_url).length;
+  const list = videos.data ?? [];
+  const uploads = useSWR<YtUploads, ApiError>(r.youtube_connected ? "/youtube/uploads" : null, fetcher, { refreshInterval: 60000 });
+  useEffect(() => {
+    if (celebrate) uploads.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [celebrate]);
+  const postedCount = r.youtube_connected ? uploads.data?.videos.length ?? 0 : list.filter((v) => v.youtube_url).length;
 
   return (
     <section className="mt-14">
@@ -687,11 +697,13 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
           ))}
         </div>
       </div>
+      {filter === "posted" ? (
+        <YouTubeList connected={r.youtube_connected} uploads={uploads.data} error={uploads.error} retry={() => uploads.mutate()} local={list.filter((v) => v.youtube_url)} />
+      ) : (
+        <>
       {videos.error && <ErrorCallout error={videos.error} onRetry={() => videos.mutate()} />}
       {videos.data && list.length === 0 && (
-        <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">
-          {filter === "posted" ? "Nothing posted to YouTube yet." : "Your videos will show up here."}
-        </p>
+        <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">Your videos will show up here.</p>
       )}
       <ul className="grid gap-3 sm:grid-cols-2">
         {list.map((v) => (
@@ -731,7 +743,65 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
           </li>
         ))}
       </ul>
+        </>
+      )}
     </section>
+  );
+}
+
+type YtUploads = { channel_title: string | null; videos: { id: string; title: string; url: string; published_at: string; thumbnail: string | null; privacy: string | null }[] };
+
+/** "On YouTube": read live from the connected channel, so it survives server restarts. */
+function YouTubeList({ connected, uploads, error, retry, local }: { connected: boolean; uploads?: YtUploads; error?: ApiError; retry: () => void; local: Video[] }) {
+  if (!connected) {
+    return local.length ? (
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {local.map((v) => (
+          <li key={v.id} className="card rounded-xl border p-3 text-sm">
+            <div className="font-display text-xl uppercase text-cream">{v.dish}</div>
+            <a href={v.youtube_url!} target="_blank" rel="noreferrer" className="text-xs text-ok hover:underline">
+              {v.youtube_url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">Connect YouTube to see everything you&apos;ve posted.</p>
+    );
+  }
+  if (error) return <ErrorCallout error={error} onRetry={retry} />;
+  if (!uploads)
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner className="h-6 w-6 text-gold" />
+      </div>
+    );
+  if (!uploads.videos.length)
+    return <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">Nothing on {uploads.channel_title ?? "your channel"} yet.</p>;
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {uploads.videos.map((y) => (
+        <li key={y.id} className="card flex gap-3 rounded-xl border p-3">
+          <a href={y.url} target="_blank" rel="noreferrer" className="relative block h-[90px] w-[120px] shrink-0 overflow-hidden rounded-md bg-black">
+            {y.thumbnail && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={y.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
+            )}
+            <span className="absolute inset-0 grid place-items-center text-xl text-white/90">▶</span>
+          </a>
+          <div className="min-w-0 flex-1">
+            <div className="line-clamp-2 text-sm font-semibold text-cream">{y.title}</div>
+            <div className="mt-1 text-xs text-muted">
+              {y.published_at ? timeAgo(y.published_at) : ""}
+              {y.privacy && y.privacy !== "public" ? ` · ${y.privacy}` : ""}
+            </div>
+            <a href={y.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-ok hover:underline">
+              Open on YouTube ↗
+            </a>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -754,6 +824,7 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
     setBusy(true);
     try {
       await api("/youtube/disconnect", { method: "POST" });
+      setYtBlob(null);
       await restaurant.mutate();
       toast("YouTube disconnected. Connect again to pick a channel.", "info");
     } catch (e) {

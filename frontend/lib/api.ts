@@ -31,6 +31,24 @@ export function onOwnerTokenChange(fn: () => void) {
   };
 }
 
+// Encrypted YouTube connection kept in the browser so it survives the free server wiping its disk.
+const YT_KEY = "wc_yt";
+export function getYtBlob(): string | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(YT_KEY);
+  } catch {
+    return null;
+  }
+}
+export function setYtBlob(blob: string | null) {
+  try {
+    if (blob) window.localStorage.setItem(YT_KEY, blob);
+    else window.localStorage.removeItem(YT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export class ApiError extends Error {
   code: string;
   retryable: boolean;
@@ -49,6 +67,8 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getOwnerToken();
   if (token) headers["X-Owner-Token"] = token;
+  const yt = getYtBlob();
+  if (yt) headers["X-YouTube-Auth"] = yt;
   let body: BodyInit | undefined;
   if (opts.json !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -78,6 +98,7 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
   }
   if (!res.ok) {
     const err = (data as ApiErrorBody | null)?.error;
+    if (err?.code === "youtube_reconnect_required") setYtBlob(null);
     throw new ApiError(
       err?.code || "http_error",
       err?.message || `Request failed (${res.status})`,
