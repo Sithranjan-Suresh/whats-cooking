@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_text_model: str = "gemini-2.5-flash"
     veo_model: str = "veo-3.1-fast-generate-preview"
-    veo_cost_per_sec_cents: int = 8
+    veo_cost_per_sec_cents: int = 8          # Veo video only (food close-up)
+    veo_audio_cost_per_sec_cents: int = 15   # Veo video + native audio (star-host format)
+    gemini_image_model: str = "gemini-2.5-flash-image"
     veo_timeout_s: int = 180
     veo_poll_s: int = 5
 

@@ -41,10 +41,21 @@ def reset_engine() -> None:
     _engine = None
 
 
+# Lightweight forward-only migrations for columns added after the first deploy.
+MIGRATIONS = [
+    ("restaurant", "presenter_asset_id", "INTEGER REFERENCES asset(id)"),
+    ("settings", "veo_audio_cost_per_sec_cents", "INTEGER NOT NULL DEFAULT 15"),
+]
+
+
 def init_db() -> None:
     eng = get_engine()
     SQLModel.metadata.create_all(eng)
     with eng.begin() as conn:
+        for table, col, ddl in MIGRATIONS:
+            cols = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
         for stmt in (
             "CREATE INDEX IF NOT EXISTS ix_sales_rest_date ON salesrecord(restaurant_id, date)",
             "CREATE INDEX IF NOT EXISTS ix_ledger_rest_date_state ON usageledger(restaurant_id, date, state)",
@@ -75,8 +86,11 @@ def current_restaurant(session: Session) -> models.Restaurant:
 def get_app_settings(session: Session, restaurant_id: int) -> models.AppSettings:
     st = session.get(models.AppSettings, restaurant_id)
     if st is None:
+        cfg = get_settings()
         st = models.AppSettings(
-            restaurant_id=restaurant_id, veo_cost_per_sec_cents=get_settings().veo_cost_per_sec_cents
+            restaurant_id=restaurant_id,
+            veo_cost_per_sec_cents=cfg.veo_cost_per_sec_cents,
+            veo_audio_cost_per_sec_cents=cfg.veo_audio_cost_per_sec_cents,
         )
         session.add(st)
         session.commit()

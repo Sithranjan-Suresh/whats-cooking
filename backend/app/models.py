@@ -20,13 +20,14 @@ class Restaurant(SQLModel, table=True):
     color_accent: str = "#F3EBDD"
     voice_tone: str = "upbeat"  # friendly|upbeat|elegant
     tts_voice: str = "en-US-AriaNeural"
+    presenter_asset_id: Optional[int] = Field(default=None, foreign_key="asset.id")  # the "star host"
     created_at: datetime = Field(default_factory=utcnow)
 
 
 class Asset(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     restaurant_id: int = Field(foreign_key="restaurant.id", index=True)
-    kind: str  # photo|logo|music
+    kind: str  # photo|logo|music|presenter
     path: str
     mime: str
     width: int = 0
@@ -139,6 +140,7 @@ class AppSettings(SQLModel, table=True):
     monthly_cap_cents: int = 1500
     free_mode: bool = False
     veo_cost_per_sec_cents: int = 8
+    veo_audio_cost_per_sec_cents: int = 15  # Veo with native audio (star-host format)
 
 
 class YouTubeAuth(SQLModel, table=True):
