@@ -238,7 +238,7 @@ function Studio() {
       {!showResult && <StudioBranding />}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_370px]">
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {!showResult && (
             <Card className="p-5">
               {/* Input picker */}
@@ -390,8 +390,8 @@ function Studio() {
           )}
 
           {showResult && (
-            <Card className="grid gap-6 p-5 md:grid-cols-2">
-              <div>
+            <Card className="grid min-w-0 gap-6 p-5 md:grid-cols-2">
+              <div className="min-w-0">
                 {jobError ? (
                   <ErrorCallout error={jobError} onRetry={refresh} title="Lost track of this job" />
                 ) : !job ? (
@@ -415,7 +415,7 @@ function Studio() {
                   </>
                 )}
               </div>
-              <div className="md:border-l md:border-line md:pl-6">
+              <div className="min-w-0 md:border-l md:border-line md:pl-6">
                 <ScriptSheet script={job?.script ?? null} loading={busy} restaurant={restaurantName} />
               </div>
             </Card>
