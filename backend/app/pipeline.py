@@ -481,7 +481,7 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
     media = get_settings().media_dir
     out = media / "videos" / f"job_{jid}_{secrets.token_hex(8)}.mp4"
     try:
-        await render.assemble_loop_with_retry(work=ctx.work, visuals=visuals, total=ctx.main_len, ass_text=ass,
+        _, sound = await render.assemble_loop_with_retry(work=ctx.work, visuals=visuals, total=ctx.main_len, ass_text=ass,
                                               logo=ctx.logo_path, music=ctx.music_path,
                                               ambient=ctx.work / "ambient.m4a", out_path=out)
         poster = await render.extract_poster(out, media / "posters" / (out.stem + ".jpg"))
@@ -489,7 +489,6 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
     except FFmpegError as e:
         raise StageFailed("assemble", "Render failed. Retry.") from e
     _finish(ctx, out, poster, info)
-    sound = "kitchen sound" if (ctx.work / "ambient.m4a").exists() else "music"
     set_stage(jid, "assemble", "done", f"{info['duration_s']:.0f}s loop · {sound} · {info['bytes'] / 1e6:.1f} MB")
 
 

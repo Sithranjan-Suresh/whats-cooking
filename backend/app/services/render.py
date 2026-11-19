@@ -32,6 +32,26 @@ STYLE_PRESETS = {
 }
 
 LOOP_XFADE = 0.4  # overlay formats: the last moment blends into the first so the Short loops
+LOOP_LOUDNESS = -16.0  # LUFS target for the food sound (Shorts play back around -14)
+SILENT_LUFS = -60.0    # quieter than this = no real sound: use music rather than boosting hiss
+
+
+async def integrated_loudness(path: Path) -> Optional[float]:
+    """EBU R128 integrated loudness (LUFS) of a file's audio, or None if it can't be measured."""
+    import asyncio
+    import re as _re
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-vn", "-af", "ebur128", "-f", "null", "-",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        _, err = await asyncio.wait_for(proc.communicate(), timeout=60)
+    except Exception:  # noqa: BLE001
+        return None
+    found = _re.findall(r"^\s*I:\s*(-?[\d.]+|-inf)\s*LUFS", err.decode(errors="replace"), _re.M)
+    if not found:
+        return None
+    return float("-inf") if found[-1] == "-inf" else float(found[-1])
 
 
 # ------------------------------------------------------------------ helpers
@@ -652,12 +672,17 @@ async def assemble_loop(
     ambient: Optional[Path],
     out_path: Path,
     safe: bool = False,
-) -> Path:
-    """Formats without a slate: full-length motion, corner logo, captions, and the last LOOP_XFADE seconds blend
+) -> tuple[Path, str]:
+    """Returns (video, sound used: "kitchen sound" | "music" | "silent"). Formats without a slate: full-length motion, corner logo, captions, and the last LOOP_XFADE seconds blend
     into the first frames so the Short loops. Sound: the AI clip's own audio up front; music only if there is none."""
     link_fonts(work)
     (work / "captions.ass").write_text(ass_text, encoding="utf-8")
     badge = _logo_badge(logo, work)
+    if ambient and Path(ambient).exists():
+        lufs = await integrated_loudness(Path(ambient))
+        if lufs is None or lufs < SILENT_LUFS:
+            log.info("AI clip sound is silent (%s LUFS): using music", lufs)
+            ambient = None
     inputs = ["-i", str(visuals)]
     if badge:
         inputs += ["-loop", "1", "-i", str(badge)]
@@ -684,7 +709,9 @@ async def assemble_loop(
     vf += f";{last}ass=captions.ass:fontsdir=fonts,format=yuv420p[vout]"
     fmt = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
     if has_amb:
-        af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,apad,atrim=0:{total:.3f},asetpts=N/SR/TB,"
+        # the food sound is the soundtrack: bring it to a consistent loudness (AI clips vary a lot)
+        af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,"
+              f"loudnorm=I={LOOP_LOUDNESS}:TP=-1.5:LRA=11,{fmt},asetpts=N/SR/TB,apad,atrim=0:{total:.3f},asetpts=N/SR/TB,"
               f"afade=t=in:d=0.12,afade=t=out:st={total - x:.3f}:d={x}[aout]")
     elif has_music:
         af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,volume=-12dB,afade=t=in:d=0.3,"
@@ -700,10 +727,10 @@ async def assemble_loop(
          "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-movflags", "+faststart", str(out_path)],
         cwd=work,
     )
-    return out_path
+    return out_path, ("kitchen sound" if has_amb else "music" if has_music else "silent")
 
 
-async def assemble_loop_with_retry(**kw) -> Path:
+async def assemble_loop_with_retry(**kw) -> tuple[Path, str]:
     try:
         return await assemble_loop(**kw, safe=False)
     except FFmpegError as e:

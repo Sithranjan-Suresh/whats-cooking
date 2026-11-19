@@ -63,3 +63,40 @@ def test_retry_keeps_the_format(client):
     j = _job(client, "money_shot")
     j2 = _wait(client, client.post(f"/jobs/{j['id']}/retry", headers=OWNER).json()["job_id"], until=("done", "failed"), timeout=150)
     assert next(s for s in j2["stages"] if s["name"] == "voice")["status"] == "skipped"
+
+
+def _fake_clip_with(monkeypatch, audio_src):
+    from app.services import veo
+
+    async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
+                        "-f", "lavfi", "-i", audio_src, "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", str(out_path)], check=True)
+        return out_path
+
+    monkeypatch.setattr(veo, "generate_clip", fake_clip)
+
+
+def _lufs(url):
+    import asyncio
+
+    from app.config import get_settings
+    from app.services import render
+
+    return asyncio.run(render.integrated_loudness(get_settings().media_dir / url.split("/media/", 1)[1]))
+
+
+def test_quiet_kitchen_sound_is_brought_up_to_a_consistent_loudness(client, monkeypatch):
+    _fake_clip_with(monkeypatch, "anoisesrc=d=8:a=0.004")  # very quiet, like the real money-shot clip (-40 LUFS)
+    j = _job(client, "money_shot", veo=True)
+    assert j["status"] == "done", j
+    assert "kitchen sound" in next(s for s in j["stages"] if s["name"] == "assemble")["note"]
+    assert -19 < _lufs(j["video"]["url"]) < -13
+
+
+def test_silent_ai_clip_falls_back_to_music(client, monkeypatch):
+    _fake_clip_with(monkeypatch, "anullsrc=r=44100:cl=stereo:d=8")
+    j = _job(client, "money_shot", veo=True)
+    assert j["status"] == "done", j
+    note = next(s for s in j["stages"] if s["name"] == "assemble")["note"]
+    assert "kitchen sound" not in note and ("music" in note or "silent" in note)  # test studio has no music asset
