@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { api, fetcher, setYtBlob, ApiError } from "@/lib/api";
+import { addMyJob, api, fetcher, getMyJobs, setYtBlob, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
 import type { InsightCard, InsightsResponse, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
@@ -70,6 +70,7 @@ function App() {
 
   const track = (id: number) => {
     setJobId(id);
+    addMyJob(id);
     try {
       window.localStorage.setItem(LAST_JOB, String(id));
     } catch {
@@ -722,7 +723,8 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
     }
   }, [videos.data, sound]);
   const [filter, setFilter] = useState<"all" | "posted">("all");
-  const list = videos.data ?? [];
+  const mine = getMyJobs();
+  const list = (videos.data ?? []).filter((v) => v.job_id != null && mine.has(v.job_id));
   const uploads = useSWR<YtUploads, ApiError>(r.youtube_connected ? "/youtube/uploads" : null, fetcher, { refreshInterval: 60000 });
   useEffect(() => {
     if (celebrate) uploads.mutate();
@@ -739,7 +741,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
         <div className="flex rounded-full border border-line bg-black/40 p-0.5 text-xs font-semibold">
           {(
             [
-              ["all", `All (${videos.data?.length ?? 0})`],
+              ["all", `All (${list.length})`],
               ["posted", `On YouTube (${postedCount})`],
             ] as const
           ).map(([k, label]) => (
@@ -755,7 +757,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
         <>
       {videos.error && <ErrorCallout error={videos.error} onRetry={() => videos.mutate()} />}
       {videos.data && list.length === 0 && (
-        <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">Your videos will show up here.</p>
+        <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">Videos you make in this browser show up here.</p>
       )}
       <ul className="grid gap-3 sm:grid-cols-2">
         {list.map((v) => (

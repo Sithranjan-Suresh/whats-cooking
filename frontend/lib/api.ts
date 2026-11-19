@@ -110,3 +110,25 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
 }
 
 export const fetcher = <T,>(path: string) => api<T>(path);
+
+// The studio is shared, so "Your videos" only lists jobs started from this browser.
+const MY_JOBS_KEY = "wc_jobs";
+
+export function getMyJobs(): Set<number> {
+  try {
+    const raw = typeof window === "undefined" ? null : window.localStorage.getItem(MY_JOBS_KEY);
+    return new Set(raw ? (JSON.parse(raw) as number[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addMyJob(id: number) {
+  try {
+    const ids = getMyJobs();
+    ids.add(id);
+    window.localStorage.setItem(MY_JOBS_KEY, JSON.stringify(Array.from(ids).slice(-200)));
+  } catch {
+    /* ignore */
+  }
+}
