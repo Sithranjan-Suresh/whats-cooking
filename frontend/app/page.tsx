@@ -109,6 +109,11 @@ function App() {
           <History r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
         </>
       )}
+      <footer className="mt-16 flex flex-wrap justify-center gap-5 font-mono text-[11px] uppercase tracking-widest text-muted">
+        <a href="/privacy" className="hover:text-cream">Privacy</a>
+        <a href="/terms" className="hover:text-cream">Terms</a>
+        <a href="https://github.com/Sithranjan-Suresh/whats-cooking" className="hover:text-cream">Code</a>
+      </footer>
     </main>
   );
 }
