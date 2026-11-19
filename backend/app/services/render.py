@@ -504,11 +504,12 @@ def _audio_graph(has_voice: bool, has_music: bool, total: float, tempo: float, s
     vi, mi = 2, (3 if has_voice else 2)
     if has_voice:
         tempo_f = f",atempo={tempo:.3f}" if tempo > 1.001 else ""
-        parts.append(f"[{vi}:a]{fmt}{tempo_f},adelay=300|300,apad,atrim=0:{total:.3f}[vraw]")
+        # asetpts after atempo/atrim: ffmpeg 7 otherwise feeds amix out-of-order timestamps and outputs ~0s of audio.
+        parts.append(f"[{vi}:a]{fmt}{tempo_f},asetpts=N/SR/TB,adelay=300|300,apad,atrim=0:{total:.3f},asetpts=N/SR/TB[vraw]")
     if has_music:
         fade_st = max(total - 1.2, 0)
         parts.append(
-            f"[{mi}:a]{fmt},atrim=0:{total:.3f},volume=-18dB,afade=t=in:d=0.6,afade=t=out:st={fade_st:.3f}:d=1.2[mus]"
+            f"[{mi}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,volume=-18dB,afade=t=in:d=0.6,afade=t=out:st={fade_st:.3f}:d=1.2[mus]"
         )
     if has_voice and has_music:
         if safe:
@@ -569,10 +570,11 @@ async def assemble(
     af, alabel = _audio_graph(has_voice, has_music, total, tempo, safe)
     if has_amb:
         fmt = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
-        af += (f";[{amb_idx}:a]{fmt},atrim=0:{main_len:.3f},volume=-9dB,afade=t=out:st={max(main_len - 0.6, 0):.3f}:d=0.6,"
-               f"apad,atrim=0:{total:.3f}[amb];{alabel}[amb]amix=inputs=2:duration=first:normalize=0[afinal]")
+        af += (f";[{amb_idx}:a]{fmt},atrim=0:{main_len:.3f},asetpts=N/SR/TB,volume=-9dB,afade=t=out:st={max(main_len - 0.6, 0):.3f}:d=0.6,"
+               f"apad,atrim=0:{total:.3f},asetpts=N/SR/TB[amb];{alabel}[amb]amix=inputs=2:duration=first:normalize=0[afinal]")
         alabel = "[afinal]"
-    preset, crf = ("ultrafast", "26") if safe else (get_settings().render_preset, "23")
+    preset = "ultrafast" if safe else get_settings().render_preset
+    crf = "27" if preset == "ultrafast" else "23"  # ultrafast needs a higher CRF to keep 8s Shorts small
     await ffmpeg(
         [*inputs, "-filter_complex", vf + ";" + af, "-map", "[vout]", "-map", alabel,
          "-t", f"{total:.3f}", "-r", str(FPS),

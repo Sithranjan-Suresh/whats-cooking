@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cx } from "@/lib/format";
 import type { ApiError } from "@/lib/api";
@@ -195,9 +196,10 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
       prev?.focus?.();
     };
   }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+  if (!open || typeof document === "undefined") return null;
+  // Portal to <body>: sticky/transformed ancestors create stacking contexts that would trap the overlay.
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
         role="dialog"
@@ -213,7 +215,8 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
