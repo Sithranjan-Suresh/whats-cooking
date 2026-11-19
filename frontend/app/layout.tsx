@@ -15,13 +15,16 @@ const courier = localFont({
 const archivo = localFont({ src: "./fonts/archivo.woff2", weight: "100 900", variable: "--f-archivo", display: "swap" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://whats-cooking-jade.vercel.app"),
   title: "What's Cooking?",
-  description: "Turn a restaurant's dish photos and sales data into published YouTube Shorts in about a minute.",
+  description: "Turn one dish photo, or your sales data, into a narrated 8-second YouTube Short in a couple of minutes. No editing.",
   openGraph: {
     title: "What's Cooking?",
-    description: "Dish photo or sales data in, published YouTube Short out. No editing, capped cost.",
+    description: "One dish photo in, a narrated 8-second YouTube Short out. No editing, no login.",
     type: "website",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "What's Cooking? turns a dish photo into a YouTube Short" }],
   },
+  twitter: { card: "summary_large_image", images: ["/og.png"] },
   icons: { icon: "/icon.svg" },
 };
 

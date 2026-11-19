@@ -4,11 +4,13 @@ from __future__ import annotations
 import csv
 import hmac
 import io
+import time
+from collections import defaultdict, deque
 import re
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Request, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -108,9 +110,9 @@ def save_image_asset(session: Session, restaurant_id: int, data: bytes, mime: st
     if kind == "photo":
         # Normalize: apply EXIF rotation, cap size, store as JPEG (Veo + ffmpeg friendly).
         img = img.convert("RGB")
-        img.thumbnail((2400, 2400))
+        img.thumbnail((s.photo_max_px, s.photo_max_px))
         path = path.with_suffix(".jpg")
-        img.save(path, quality=92)
+        img.save(path, quality=88)
         mime = "image/jpeg"
     else:
         if img.mode not in ("RGBA", "RGB"):
@@ -130,13 +132,31 @@ def save_image_asset(session: Session, restaurant_id: int, data: bytes, mime: st
     return a
 
 
+_upload_times: dict[str, deque] = defaultdict(deque)
+
+
+def upload_limit(request: Request) -> None:
+    """Per-visitor cap on uploads (they're stored in the database, which has a size quota)."""
+    from .jobs import client_ip
+
+    ip, now = client_ip(request), time.time()
+    q = _upload_times[ip]
+    while q and now - q[0] > 3600:
+        q.popleft()
+    if len(q) >= get_settings().uploads_per_hour_per_ip:
+        raise AppError("rate_limited", "That's a lot of uploads in one hour. Try again a bit later.", 429, retryable=True)
+    q.append(now)
+
+
 @router.post("/uploads")
 async def upload(
+    request: Request,
     file: UploadFile = File(...),
     kind: Literal["photo", "logo"] = Form("photo"),
     actor: Actor = Depends(get_actor),
     session: Session = Depends(get_session),
 ):
+    upload_limit(request)
     if kind == "logo":
         require_owner(actor)
     r = current_restaurant(session)

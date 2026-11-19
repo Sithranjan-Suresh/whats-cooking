@@ -155,6 +155,14 @@ def current_restaurant(session: Session) -> models.Restaurant:
     return r or _create_workspace(session, tpl, slug)
 
 
+def owned(session: Session, model, obj_id: int, r: models.Restaurant, what: str = "Not found"):
+    """Fetch a row by id only if it belongs to this studio (404 otherwise, so ids from other studios leak nothing)."""
+    obj = session.get(model, obj_id)
+    if obj is None or getattr(obj, "restaurant_id", None) != r.id:
+        raise AppError("not_found", what, 404)
+    return obj
+
+
 def asset_usable(session: Session, asset: Optional[models.Asset], r: models.Restaurant) -> bool:
     """A studio may use its own assets and the template's (the shared demo photos and logo)."""
     return bool(asset) and asset.restaurant_id in (r.id, template_restaurant(session).id)

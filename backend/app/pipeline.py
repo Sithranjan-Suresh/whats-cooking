@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import random
+import secrets
 import shutil
 import time
 from pathlib import Path
@@ -446,7 +447,7 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
                            color_accent=ctx.restaurant["color_accent"], style=ctx.style, speech=speech)
     card = await (ctx.card_task or _start_end_card(ctx))
     media = get_settings().media_dir
-    out = media / "videos" / f"job_{jid}_{int(time.time())}.mp4"
+    out = media / "videos" / f"job_{jid}_{secrets.token_hex(8)}.mp4"  # unguessable: /media is public
     try:
         await render.assemble_with_retry(work=ctx.work, visuals=visuals, main_len=main_len, ass_text=ass,
                                          end_card_png=card, voice=voice, music=ctx.music_path, out_path=out,
@@ -516,7 +517,7 @@ async def _timeline(ctx: Ctx, times: list[tuple[str, float]], *, fail_rate: floa
 
 def _copy_video(src: Path, jid: int, tag: str) -> tuple[Path, Optional[Path]]:
     media = get_settings().media_dir
-    out = media / "videos" / f"{tag}_{jid}_{int(time.time())}.mp4"
+    out = media / "videos" / f"{tag}_{jid}_{secrets.token_hex(8)}.mp4"
     shutil.copyfile(src, out)
     poster_src = src.with_suffix(".jpg")
     poster = None

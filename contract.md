@@ -91,7 +91,8 @@ stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_ti
 
 ```ts
 Restaurant { id, name, slug, logo_asset_id, logo_url, color_primary:"#RRGGBB", color_accent, voice_tone:"friendly"|"upbeat"|"elegant",
-             tts_voice, menu_count, has_sales, youtube_configured, youtube_connected (this visitor), youtube_channel_title, voices:[{id,label}] }
+             tts_voice, menu_count, has_sales, youtube_configured, youtube_connected (this visitor), youtube_channel_title, voices:[{id,label}],
+             demo_name, demo_logo (this studio still uses the demo's name / logo) }
 
 MenuItem { id, name, price_cents|null, price:"$14.99"|null, description|null, category|null, photo_asset_id|null, photo_url|null }
 

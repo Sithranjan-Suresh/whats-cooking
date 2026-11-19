@@ -19,9 +19,20 @@ export default function Privacy() {
         <li>Sales CSV files you upload (item names, dates, quantities, revenue).</li>
       </ul>
       <p>
-        These are stored on our server only to make your videos. The prototype runs on free hosting that clears its storage
-        whenever it restarts, so uploads and generated videos are deleted then. Everyone using this test site shares one
-        demo workspace, so don&apos;t upload anything you wouldn&apos;t want other testers to see.
+        There are no accounts. The first time you open the site, your browser creates a random studio id and keeps it in its
+        local storage; everything you add is filed under that id. Your name, logo, photos, dish details, sales data and video
+        history are stored in our database (Neon Postgres) so they survive server restarts. Generated video files are kept on
+        the video server only until it restarts; anything you posted stays on YouTube.
+      </p>
+      <p>
+        The studio id isn&apos;t a password: this is a prototype, so don&apos;t upload anything confidential. To have a studio
+        deleted, contact us (below) from that browser and we&apos;ll remove it.
+      </p>
+
+      <h2>Where it runs</h2>
+      <p>
+        The website is hosted on Vercel, the video server on Render, and the database on Neon. They process data only to run
+        the service.
       </p>
 
       <h2>AI processing</h2>
@@ -53,7 +64,7 @@ export default function Privacy() {
       </p>
 
       <h2>Cookies and tracking</h2>
-      <p>No analytics, ads or tracking cookies. Your browser&apos;s local storage holds your YouTube connection and a sound on/off setting.</p>
+      <p>No analytics, ads or tracking cookies. Your browser&apos;s local storage holds your studio id, your YouTube connection and a sound on/off setting.</p>
 
       <h2>Contact</h2>
       <p>

@@ -31,10 +31,10 @@ def _jpeg(w=900, h=1200, color=(200, 120, 40)) -> bytes:
     return b.getvalue()
 
 
-def _wait(client, job_id, until=("done", "failed", "needs_dish"), timeout=60):
+def _wait(client, job_id, until=("done", "failed", "needs_dish"), timeout=60, headers=None):
     t = time.time()
     while time.time() - t < timeout:
-        j = client.get(f"/jobs/{job_id}").json()
+        j = client.get(f"/jobs/{job_id}", headers=headers or {}).json()
         if j["status"] in until:
             return j
         time.sleep(0.3)
@@ -480,3 +480,34 @@ def test_all_studios_share_one_ai_budget(client, monkeypatch):
     rid_a = client.get("/restaurants/me", headers=a).json()["id"]
     assert budget.reserve_veo(rid_a, jid, 8).allowed
     assert client.get("/usage", headers={**b, **OWNER}).json()["ai_videos_left"] == before - 1
+
+
+def test_studios_cannot_reach_each_others_jobs_and_videos(client):
+    import re
+
+    a, b = {"X-Workspace": "6" * 32}, {"X-Workspace": "7" * 32}
+    jid = _menu_job(client, headers={**a, **OWNER})
+    j = _wait(client, jid, until=("done", "failed"), timeout=90, headers=a)
+    assert j["status"] == "done"
+    vid = j["video"]["id"]
+    assert re.search(r"job_\d+_[0-9a-f]{16}\.mp4$", j["video"]["url"])  # file names can't be guessed
+    # the owner studio sees it (the test client's default headers are studio "a…a", so pass the studio explicitly)
+    assert client.get(f"/jobs/{jid}", headers=a).status_code == 200
+    for method, path, body in [("get", f"/jobs/{jid}", None), ("get", f"/videos/{vid}", None),
+                               ("post", f"/jobs/{jid}/retry", {}), ("post", f"/jobs/{jid}/confirm-dish", {"menu_item_id": None}),
+                               ("post", f"/jobs/{jid}/edit", {"beats": [{"caption": "x"}]}),
+                               ("post", f"/videos/{vid}/publish", {"title": "t"})]:
+        r = getattr(client, method)(path, headers={**b, **OWNER}, **({"json": body} if body is not None else {}))
+        assert r.status_code == 404, (path, r.status_code)
+
+
+def test_upload_rate_limit(client, monkeypatch):
+    from app.config import get_settings
+    from app.routers import core
+
+    monkeypatch.setattr(get_settings(), "uploads_per_hour_per_ip", 2)
+    core._upload_times.clear()
+    up = lambda: client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"})
+    assert up().status_code == 200 and up().status_code == 200
+    r = up()
+    assert r.status_code == 429 and r.json()["error"]["code"] == "rate_limited"

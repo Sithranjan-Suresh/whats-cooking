@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     jobs_per_hour_per_ip: int = 6
     active_jobs_per_ip: int = 1
     max_queued_jobs: int = 4
+    uploads_per_hour_per_ip: int = 40   # photos/logos/CSVs are stored in the DB: keep one visitor from filling it
+    photo_max_px: int = 1600            # stored photo size (720p video needs far less; keeps the DB small)
 
     @property
     def media_dir(self) -> Path:

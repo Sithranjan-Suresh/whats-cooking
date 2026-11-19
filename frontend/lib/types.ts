@@ -37,6 +37,9 @@ export interface Restaurant {
   youtube_connected: boolean;
   youtube_configured?: boolean;
   youtube_channel_title: string | null;
+  /** This studio still uses the demo restaurant's name / logo (new studios start as a copy of the demo). */
+  demo_name?: boolean;
+  demo_logo?: boolean;
   voices: { id: string; label: string }[];
 }
 

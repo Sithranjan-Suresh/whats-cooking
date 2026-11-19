@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { acceptYouTubeConnection, addMyJob, api, fetcher, getMyJobs, setYtBlob, startYouTubeConnect, ApiError } from "@/lib/api";
+import { acceptYouTubeConnection, api, fetcher, setYtBlob, startYouTubeConnect, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
 import type { InsightCard, InsightsResponse, Job, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
@@ -84,7 +84,6 @@ function App() {
 
   const track = (id: number) => {
     setJobId(id);
-    addMyJob(id);
     try {
       window.localStorage.setItem(LAST_JOB, String(id));
     } catch {
@@ -124,26 +123,44 @@ function App() {
             <div className="min-w-0 space-y-6">
               <StepLogo r={restaurant.data} onChange={() => restaurant.mutate()} />
               <StepDish onStarted={track} busy={busy} />
+              <StepYouTube r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
             <div className={cx("lg:sticky lg:top-8 lg:order-none lg:self-start", jobId ? "order-first" : "order-last")}>
-              <ResultPanel jobId={jobId} job={job} jobError={jobError} refresh={refresh} busy={busy} r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
+              <ResultPanel jobId={jobId} job={job} jobError={jobError} refresh={refresh} onRetried={track} busy={busy} r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
           </div>
           <History r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
         </>
       )}
-      <footer className="mt-16 flex flex-wrap justify-center gap-5 font-mono text-[11px] uppercase tracking-widest text-muted">
-        <a href="/privacy" className="hover:text-cream">Privacy</a>
-        <a href="/terms" className="hover:text-cream">Terms</a>
-        <a href="https://github.com/Sithranjan-Suresh/whats-cooking" className="hover:text-cream">Code</a>
+      <footer className="mt-16 flex flex-wrap justify-center gap-2 font-mono text-[11px] uppercase tracking-widest text-muted">
+        {[
+          ["/privacy", "Privacy"],
+          ["/terms", "Terms"],
+          ["https://github.com/Sithranjan-Suresh/whats-cooking", "Code"],
+        ].map(([href, label]) => (
+          <a key={href} href={href} className="inline-flex min-h-[40px] items-center rounded-lg px-3 hover:text-cream">
+            {label}
+          </a>
+        ))}
       </footer>
     </main>
   );
 }
 
 function Header() {
+  const { sound, setSound } = useTheme();
   return (
-    <header className="text-center">
+    <header className="relative pt-12 text-center sm:pt-0">
+      <button
+        type="button"
+        onClick={() => setSound(!sound)}
+        aria-pressed={sound}
+        aria-label={sound ? "Sound effects on (click to mute)" : "Sound effects off (click to turn on)"}
+        title={sound ? "Sound on" : "Sound off"}
+        className="absolute right-0 top-0 grid h-10 w-10 place-items-center rounded-full border border-line text-lg text-muted transition hover:border-gold/60 hover:text-cream"
+      >
+        {sound ? "🔊" : "🔇"}
+      </button>
       <div className="relative mx-auto inline-block rounded-2xl bg-black/60 px-8 pb-4 pt-5 ring-1 ring-gold/30">
         <BulbRow className="absolute inset-x-4 top-1.5" n={13} />
         <h1 className="font-display text-[44px] uppercase leading-none tracking-[.04em] text-cream sm:text-[64px]">
@@ -175,15 +192,20 @@ function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(r.name);
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   useEffect(() => setName(r.name), [r.name]);
+  const demo = !!(r.demo_name || r.demo_logo);
 
   const saveName = async () => {
     const n = name.trim();
-    if (!n || n === r.name) return;
+    if (!n) return setName(r.name); // never leave the name blank
+    if (n === r.name) return;
     try {
       await api<Restaurant>("/restaurants/me", { method: "PATCH", json: { name: n } });
       onChange();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       toast((e as Error).message, "bad");
     }
@@ -201,7 +223,7 @@ function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
       const a = await api<{ asset_id: number }>("/uploads", { form: fd });
       await api<Restaurant>("/restaurants/me", { method: "PATCH", json: { logo_asset_id: a.asset_id } });
       onChange();
-      toast("Logo saved. It closes every video.", "ok");
+      toast("Logo saved. Every video ends with it.", "ok");
     } catch (e) {
       toast((e as Error).message, "bad");
     } finally {
@@ -210,7 +232,12 @@ function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
   };
 
   return (
-    <StepCard n={1} title="Your logo" done={!!r.logo_url}>
+    <StepCard n={1} title="Your restaurant" done={!!r.logo_url && !demo}>
+      {demo && (
+        <p className="mb-4 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-cream">
+          You&apos;re using the <b>demo restaurant</b>. Add your own {r.demo_name && r.demo_logo ? "name and logo" : r.demo_name ? "name" : "logo"}: every video ends with them.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-4">
         <button
           type="button"
@@ -242,7 +269,7 @@ function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
           }}
         />
         <div className="min-w-[200px] flex-1">
-          <Field label="Restaurant name" htmlFor="rname">
+          <Field label="Restaurant name" htmlFor="rname" hint={saved ? <span className="text-ok">✓ Saved</span> : undefined}>
             <input id="rname" className={inputCls} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()} />
           </Field>
           <Button variant="ghost" className="mt-3 min-h-[38px]" onClick={() => file.current?.click()} loading={busy}>
@@ -329,7 +356,19 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
 
   return (
     <StepCard n={2} title="Pick the dish">
-      <div role="tablist" className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-bg p-1">
+      <div
+        role="tablist"
+        aria-label="Where the dish comes from"
+        className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-bg p-1"
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          const next = source === "photo" ? "csv" : "photo";
+          setSource(next);
+          setPhoto(null);
+          setError(null);
+          document.getElementById(`tab-${next}`)?.focus();
+        }}
+      >
         {(
           [
             ["photo", "📷 Upload a dish photo"],
@@ -338,8 +377,11 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
         ).map(([k, label]) => (
           <button
             key={k}
+            id={`tab-${k}`}
             role="tab"
             aria-selected={source === k}
+            aria-controls="dish-panel"
+            tabIndex={source === k ? 0 : -1}
             onClick={() => {
               setSource(k);
               setPhoto(null);
@@ -352,6 +394,7 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
         ))}
       </div>
 
+      <div id="dish-panel" role="tabpanel" aria-labelledby={`tab-${source}`}>
       {source === "photo" ? (
         <div className="space-y-4">
           <PhotoDrop onFile={uploadPhoto} busy={uploading} preview={photo?.url} />
@@ -389,6 +432,7 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
           onPhoto={uploadPhoto}
         />
       )}
+      </div>
 
       {error && (
         <div className="mt-4 space-y-2">
@@ -540,6 +584,7 @@ function ResultPanel({
   job,
   jobError,
   refresh,
+  onRetried,
   busy,
   r,
   ytConfigured,
@@ -548,6 +593,7 @@ function ResultPanel({
   job: ReturnType<typeof useJob>["job"];
   jobError: ApiError | null;
   refresh: () => void;
+  onRetried: (id: number) => void;
   busy: boolean;
   r: Restaurant;
   ytConfigured: boolean;
@@ -567,6 +613,23 @@ function ResultPanel({
     return () => clearInterval(t);
   }, [busy]);
   const elapsed = job ? Math.max(0, Math.round((now - new Date(job.created_at).getTime()) / 1000)) : 0;
+  const ai = !!job?.veo_requested;
+  const label = (name: string) => (name === "visuals" && !ai ? "Animating your photo" : STEP_LABEL[name] ?? name);
+  const eta = (name: string) => (name === "visuals" && !ai ? "~30s" : STEP_ETA[name]);
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    if (!job) return;
+    setRetrying(true);
+    try {
+      const res = await api<{ job_id: number }>(`/jobs/${job.id}/retry`, { method: "POST" });
+      onRetried(res.job_id);
+    } catch (e) {
+      toast((e as Error).message, "bad");
+    } finally {
+      setRetrying(false);
+    }
+  };
+  const toast = useToast();
 
   return (
     <div>
@@ -576,24 +639,28 @@ function ResultPanel({
           <div className="h-1.5 overflow-hidden rounded-full bg-panel2">
             <motion.div className="h-full bg-gold" animate={{ width: `${Math.max(8, (doneCount / 5) * 100)}%` }} transition={{ duration: 0.6 }} />
           </div>
+          <p className="sr-only" aria-live="polite">{running ? label(running.name) : ""}</p>
           <ol className="mt-3 space-y-1 font-mono text-[11px]">
             {(job?.stages ?? []).map((st) => (
               <li key={st.name} className={cx("flex justify-between gap-2", st.status === "done" ? "text-ok" : st.status === "running" ? "text-gold" : "text-muted/60")}>
                 <span>
-                  {st.status === "done" ? "✓" : st.status === "running" ? "●" : "○"} {STEP_LABEL[st.name] ?? st.name}
+                  {st.status === "done" ? "✓" : st.status === "running" ? "●" : "○"} {label(st.name)}
                 </span>
-                <span>{STEP_ETA[st.name]}</span>
+                <span>{eta(st.name)}</span>
               </li>
             ))}
           </ol>
           <div className="mt-2 text-center font-mono text-[11px] text-muted">
-            {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} · usually 2–3 min on our free server
+            {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} · usually {ai ? "2–3 min" : "about 1–2 min"} on our free server
           </div>
         </div>
       )}
       {job?.status === "failed" && (
-        <div className="mx-auto mt-4 max-w-[320px]">
+        <div className="mx-auto mt-4 max-w-[320px] space-y-2">
           <ErrorCallout error={job.error || "That take failed."} />
+          <Button className="w-full" onClick={retry} loading={retrying}>
+            Try again
+          </Button>
         </div>
       )}
       {jobError && jobId && (
@@ -751,8 +818,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
     }
   }, [videos.data, sound]);
   const [filter, setFilter] = useState<"all" | "posted">("all");
-  const mine = getMyJobs();
-  const list = (videos.data ?? []).filter((v) => v.job_id != null && mine.has(v.job_id));
+  const list = videos.data ?? [];
   const uploads = useSWR<YtUploads, ApiError>(r.youtube_connected ? "/youtube/uploads" : null, fetcher, { refreshInterval: 60000 });
   useEffect(() => {
     if (celebrate) uploads.mutate();
@@ -763,7 +829,6 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
   return (
     <section className="mt-14">
       <Celebration show={celebrate} onDone={() => setCelebrate(false)} />
-      <YouTubeStatus r={r} ytConfigured={ytConfigured} />
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <h2 className="font-display text-[40px] uppercase leading-none tracking-[.03em] text-cream">Your videos</h2>
         <div className="flex rounded-full border border-line bg-black/40 p-0.5 text-xs font-semibold">
@@ -773,7 +838,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
               ["posted", `On YouTube (${postedCount})`],
             ] as const
           ).map(([k, label]) => (
-            <button key={k} onClick={() => setFilter(k)} className={cx("rounded-full px-3 py-1.5", filter === k ? "bg-gold text-ongold" : "text-muted hover:text-cream")}>
+            <button key={k} onClick={() => setFilter(k)} aria-pressed={filter === k} className={cx("min-h-[40px] rounded-full px-4", filter === k ? "bg-gold text-ongold" : "text-muted hover:text-cream")}>
               {label}
             </button>
           ))}
@@ -785,7 +850,9 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
         <>
       {videos.error && <ErrorCallout error={videos.error} onRetry={() => videos.mutate()} />}
       {videos.data && list.length === 0 && (
-        <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">Videos you make in this browser show up here.</p>
+        <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">
+          Videos you make show up here. Post them to YouTube or download them: after a server restart only the posted ones are kept.
+        </p>
       )}
       <ul className="grid gap-3 sm:grid-cols-2">
         {list.map((v) => (
@@ -815,7 +882,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
                 <a href={v.url} download className="inline-flex min-h-[36px] items-center rounded-lg border border-line px-3 text-xs font-semibold text-cream hover:border-gold/60">
                   Download
                 </a>
-                {!v.youtube_url && (
+                {!v.youtube_url && r.youtube_connected && (
                   <div className="[&>button]:min-h-[36px] [&>button]:rounded-lg [&>button]:px-3 [&>button]:text-xs [&>span]:min-h-[36px] [&>span]:text-xs">
                     <PostButton v={v} r={r} ytConfigured={ytConfigured} onChanged={() => videos.mutate()} />
                   </div>
@@ -887,7 +954,7 @@ function YouTubeList({ connected, uploads, error, retry, local }: { connected: b
   );
 }
 
-function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) {
+function StepYouTube({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) {
   const restaurant = useRestaurant();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -915,7 +982,8 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
     }
   };
   return (
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-black/40 px-4 py-3 text-sm">
+    <StepCard n={3} title="Post to YouTube" done={r.youtube_connected}>
+    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
       <div className="flex min-w-0 items-center gap-2">
         <span className="grid h-7 w-10 shrink-0 place-items-center rounded-md bg-[#ff0033] text-[11px] font-bold text-white">▶</span>
         {r.youtube_connected ? (
@@ -923,7 +991,7 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
             Posting to <b>{r.youtube_channel_title ?? "your channel"}</b> <span className="text-muted">· only on this device</span>
           </span>
         ) : (
-          <span className="text-muted">Connect your own YouTube channel to post videos there.</span>
+          <span className="text-muted">Connect your channel once, then post any video in one tap. The connection stays in this browser.</span>
         )}
       </div>
       {r.youtube_connected ? (
@@ -936,5 +1004,6 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
         </Button>
       )}
     </div>
+    </StepCard>
   );
 }

@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 
 from ..auth import Actor, get_actor, require_owner
 from ..config import get_settings
-from ..db import current_restaurant, get_session, session_scope
+from ..db import current_restaurant, get_session, owned, session_scope
 from ..errors import AppError
 from ..models import Video, jdump
 from ..serializers import video_out
@@ -36,9 +36,7 @@ def list_videos(session: Session = Depends(get_session)):
 
 @router.get("/videos/{video_id}")
 def get_video(video_id: int, session: Session = Depends(get_session)):
-    v = session.get(Video, video_id)
-    if not v:
-        raise AppError("not_found", "Video not found", 404)
+    v = owned(session, Video, video_id, current_restaurant(session), "Video not found")
     return video_out(session, v)
 
 
@@ -97,9 +95,7 @@ async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_a
                   yt: Optional[dict] = Depends(viewer_youtube), session: Session = Depends(get_session)):
     """Posts to the *calling visitor's* channel (their browser's connection)."""
     require_owner(actor)
-    v = session.get(Video, video_id)
-    if not v:
-        raise AppError("not_found", "Video not found", 404)
+    v = owned(session, Video, video_id, current_restaurant(session), "Video not found")
     if v.publish_status == "publishing":
         raise AppError("already_publishing", "Already posting this one.", 409)
     token = _require_youtube(yt)["rt"]

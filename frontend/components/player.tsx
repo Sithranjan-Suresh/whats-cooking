@@ -77,7 +77,7 @@ export function PhonePlayer({
           {failed && <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-cream">Couldn&apos;t load the video. Use Download instead.</div>}
         </div>
       )}
-      {overlay && <div className="absolute inset-0 z-10">{overlay}</div>}
+      {overlay && <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div>}
     </div>
   );
 }

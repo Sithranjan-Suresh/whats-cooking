@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 
 from ..auth import Actor, get_actor
 from ..config import get_settings
-from ..db import asset_usable, current_restaurant, get_session
+from ..db import asset_usable, current_restaurant, get_session, owned
 from ..errors import AppError
 from ..models import Asset, Insight, Job, MenuItem, jdump
 from ..pipeline import initial_stages, job_queue
@@ -155,9 +155,7 @@ def list_jobs(status: Optional[str] = None, session: Session = Depends(get_sessi
 
 @router.get("/jobs/{job_id}")
 def get_job(job_id: int, session: Session = Depends(get_session)):
-    j = session.get(Job, job_id)
-    if not j:
-        raise AppError("not_found", "Job not found", 404)
+    j = owned(session, Job, job_id, current_restaurant(session), "Job not found")
     return job_out(session, j)
 
 
@@ -170,9 +168,7 @@ class ConfirmDish(BaseModel):
 def confirm_dish(job_id: int, body: ConfirmDish, session: Session = Depends(get_session)):
     from ..models import jload
 
-    j = session.get(Job, job_id)
-    if not j:
-        raise AppError("not_found", "Job not found", 404)
+    j = owned(session, Job, job_id, current_restaurant(session), "Job not found")
     if j.status != "needs_dish":
         raise AppError("not_waiting", "This job isn't waiting for a dish.", 409)
     flags = jload(j.flags_json, {}) or {}
@@ -204,9 +200,7 @@ def confirm_dish(job_id: int, body: ConfirmDish, session: Session = Depends(get_
 def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
     from ..models import jload
 
-    old = session.get(Job, job_id)
-    if not old:
-        raise AppError("not_found", "Job not found", 404)
+    old = owned(session, Job, job_id, current_restaurant(session), "Job not found")
     ip = _admit(request, actor, session)
     flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items() if k in ("not_on_menu", "continue_anyway")}
     flags["demo"] = actor != "owner"
@@ -245,8 +239,8 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     from ..services import scripts as sc
     from ..pipeline import initial_stages as stages0
 
-    old = session.get(Job, job_id)
-    if not old or not old.script_json:
+    old = owned(session, Job, job_id, current_restaurant(session), "Job or script not found")
+    if not old.script_json:
         raise AppError("not_found", "Job or script not found", 404)
     ip = _admit(request, actor, session)
     script = jload(old.script_json, {})

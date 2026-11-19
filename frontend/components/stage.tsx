@@ -91,10 +91,12 @@ export function PlayerStage({
   }, [job]);
   const revealing = revealKey === job?.id && !reduce;
 
+  // Before the first take, play a real example so first-time visitors see what they'll get.
+  const example = !job && !previewImg;
   const player = (
     <PhonePlayer
-      src={done ? job!.video!.url : null}
-      poster={job?.video?.poster_url}
+      src={done ? job!.video!.url : example ? "/example-short.mp4" : null}
+      poster={done ? job?.video?.poster_url : example ? "/example-short.jpg" : null}
       placeholder={job?.photo_url ?? previewImg}
       overlay={
         busy ? (
@@ -103,8 +105,12 @@ export function PlayerStage({
             <div className="font-display text-3xl uppercase tracking-[.12em] text-cream">{t.studio.working}…</div>
             <div className="font-mono text-[11px] text-cream/75">{job?.stages.find((s) => s.status === "running")?.note || ""}</div>
           </div>
-        ) : !job && !previewImg ? (
-          <div className="flex h-full items-center justify-center p-6 text-center font-mono text-xs uppercase tracking-widest text-muted">{t.studio.placeholder}</div>
+        ) : example ? (
+          <div className="pointer-events-none flex justify-center pt-6">
+            <span className="rounded-full bg-black/70 px-3 py-1 font-mono text-[10px] uppercase tracking-[.2em] text-gold backdrop-blur">
+              Example · made from one photo
+            </span>
+          </div>
         ) : null
       }
     />

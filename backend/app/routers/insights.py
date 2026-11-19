@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, delete, select
 
@@ -132,9 +132,12 @@ def _mock_cards() -> dict:
 
 
 @router.post("/sales/import")
-async def sales_import(file: UploadFile = File(...), create_missing: bool = True, actor: Actor = Depends(get_actor),
-                       session: Session = Depends(get_session)):
+async def sales_import(request: Request, file: UploadFile = File(...), create_missing: bool = True,
+                       actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
     require_owner(actor)
+    from .core import upload_limit
+
+    upload_limit(request)
     r = current_restaurant(session)
     raw = await file.read(5 * 1024 * 1024 + 1)
     if len(raw) > 5 * 1024 * 1024:
@@ -183,7 +186,7 @@ async def refresh_insights(actor: Actor = Depends(get_actor), session: Session =
 @router.get("/insights/{insight_id}")
 def get_insight(insight_id: int, session: Session = Depends(get_session)):
     ins = session.get(Insight, insight_id)
-    if not ins:
+    if not ins or ins.restaurant_id != current_restaurant(session).id:
         raise AppError("not_found", "That insight is gone (sales data was refreshed).", 404)
     return insight_card(session, ins)
 

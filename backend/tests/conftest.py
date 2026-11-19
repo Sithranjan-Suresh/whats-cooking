@@ -26,6 +26,7 @@ os.environ.update(
         "JOBS_PER_HOUR_PER_IP": "1000",
         "ACTIVE_JOBS_PER_IP": "1000",
         "MAX_QUEUED_JOBS": "1000",
+        "UPLOADS_PER_HOUR_PER_IP": "100000",
         "DEMO_JOBS_PER_HOUR_PER_IP": "1000",
     }
 )
