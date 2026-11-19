@@ -43,113 +43,6 @@ export function Spinner({ className }: { className?: string }) {
 }
 
 // ---------------------------------------------------------------- Card
-export function Card({ className, children, as: As = "div" }: { className?: string; children: ReactNode; as?: "div" | "section" | "article" }) {
-  return <As className={cx("card rounded-xl border border-line bg-panel", className)}>{children}</As>;
-}
-
-export function SectionTitle({ title, sub, right, eyebrow }: { title: string; sub?: ReactNode; right?: ReactNode; eyebrow?: string }) {
-  return (
-    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        {eyebrow && (
-          <div className="mb-2 flex items-center gap-2 font-mono text-[12px] uppercase tracking-[.28em] text-gold studio:before:content-['★']">
-            {eyebrow}
-          </div>
-        )}
-        <h1 className="font-display uppercase leading-[.85] text-cream studio:text-[64px] studio:tracking-[.02em] studio:[text-shadow:0_2px_30px_rgb(var(--ember)/.6)] sm:studio:text-[88px]">
-          {title}
-        </h1>
-        {sub && <p className="mt-3 max-w-xl text-[15px] text-muted">{sub}</p>}
-      </div>
-      {right}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- Badge
-type Tone = "neutral" | "gold" | "ok" | "bad" | "info";
-export function Badge({ tone = "neutral", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
-  const t = {
-    neutral: "border-line text-muted",
-    gold: "border-gold/50 text-gold bg-gold/10",
-    ok: "border-ok/40 text-ok bg-ok/10",
-    bad: "border-bad/50 text-bad bg-bad/10",
-    info: "border-cream/20 text-cream bg-cream/5",
-  }[tone];
-  return (
-    <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider", t, className)}>
-      {children}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------- Toggle
-export function Toggle({
-  checked,
-  onChange,
-  disabled,
-  label,
-  id,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  label: string;
-  id?: string;
-}) {
-  return (
-    <button
-      id={id}
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cx(
-        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
-        checked ? "border-gold bg-gold" : "border-line bg-bg",
-        disabled && "cursor-not-allowed opacity-45",
-      )}
-    >
-      <span className={cx("inline-block h-5 w-5 rounded-full shadow transition", checked ? "translate-x-6 bg-bg" : "translate-x-1 bg-muted")} />
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------- Meter
-export function Meter({ value, max, label }: { value: number; max: number; label: string }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 100;
-  const over = value >= max;
-  return (
-    <div role="meter" aria-label={label} aria-valuenow={value} aria-valuemin={0} aria-valuemax={max}>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-bg">
-        <div className={cx("h-full rounded-full transition-all duration-700", over ? "bg-bad" : pct > 75 ? "bg-gold2" : "bg-gold")} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
-export function StatTile({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: "bad" | "ok" }) {
-  return (
-    <div className="rounded-xl border border-line bg-bg/40 p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</div>
-      <div className={cx("mt-1 font-mono text-2xl", tone === "bad" ? "text-bad" : tone === "ok" ? "text-ok" : "text-cream")}>{value}</div>
-      {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- Skeleton
-export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div className={cx("relative overflow-hidden rounded-xl bg-panel2", className)} aria-hidden>
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-cream/5 to-transparent motion-reduce:hidden" />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- ErrorCallout
 export function ErrorCallout({ error, onRetry, title }: { error: ApiError | Error | string | null | undefined; onRetry?: () => void; title?: string }) {
   if (!error) return null;
   const msg = typeof error === "string" ? error : error.message;
@@ -169,18 +62,6 @@ export function ErrorCallout({ error, onRetry, title }: { error: ApiError | Erro
   );
 }
 
-export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-line px-6 py-12 text-center">
-      {icon && <div className="mb-3 text-gold">{icon}</div>}
-      <div className="font-display text-xl uppercase tracking-wide text-cream">{title}</div>
-      {body && <div className="mt-2 max-w-md text-sm text-muted">{body}</div>}
-      {action && <div className="mt-5">{action}</div>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- Modal
 export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

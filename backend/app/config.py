@@ -18,9 +18,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_text_model: str = "gemini-3.5-flash"
     veo_model: str = "gemini-omni-1.2-flash"  # Veo's successor (Interactions API); veo-* ids still work
-    veo_cost_per_sec_cents: int = 8          # Veo video only (food close-up)
-    veo_audio_cost_per_sec_cents: int = 15   # Veo video + native audio (star-host format)
-    gemini_image_model: str = "gemini-2.5-flash-image"
+    veo_cost_per_sec_cents: int = 8          # estimated AI-motion cost per second (8s clip ≈ $0.64)
     veo_timeout_s: int = 180
     veo_poll_s: int = 5
 
@@ -36,7 +34,6 @@ class Settings(BaseSettings):
     # Modes
     demo_mode: bool = True
     mock_pipeline: bool = False
-    demo_cache: bool = True
     mock_fail_rate: float = 0.0
     mock_needs_dish: bool = False
 

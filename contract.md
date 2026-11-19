@@ -22,15 +22,16 @@ Serializers: `backend/app/serializers.py`. Change this file deliberately and pre
 |---|---|
 | `X-Owner-Token` equals `OWNER_TOKEN` | **owner**: everything |
 | `X-Owner-Token` present but wrong | 401 `bad_owner_token` |
-| No token, `DEMO_MODE=1` | **demo**: read-only + free-mode generation. Veo forced off, publishing/settings/brand/sales import → 403 `demo_mode`. Job creation rate-limited per IP |
+| No token, `DEMO_MODE=1` | **demo**: read-only + free-mode generation. AI motion forced off, publishing/settings/brand/sales import → 403 `demo_mode`. Job creation rate-limited per IP |
 | No token, `DEMO_MODE=0`, `OWNER_TOKEN` set | 401 |
 | No token, no `OWNER_TOKEN` configured | owner (local dev) |
 
 The frontend stores the owner token in `localStorage` after a one-time unlock.
 
-**YouTube connection on free hosting:** the callback hands the browser an encrypted copy of the connection (URL fragment `#yt=…`,
-Fernet-encrypted with `APP_SECRET`). The frontend keeps it in `localStorage` and sends it on every request as
-`X-YouTube-Auth`; if the server's DB was wiped (restart/sleep), middleware silently restores the connection from it.
+**YouTube is per visitor:** the OAuth callback hands the visitor's browser an encrypted connection (URL fragment
+`#yt=…`, Fernet with `APP_SECRET`). The browser keeps it in `localStorage` and sends it as `X-YouTube-Auth`; the server
+stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_title` for *that* visitor, and
+`POST /videos/{id}/publish` uploads to *their* channel.
 
 ## Endpoints
 
@@ -57,11 +58,10 @@ Fernet-encrypted with `APP_SECRET`). The frontend keeps it in `localStorage` and
 | GET `/videos` | any | — | `Video[]` newest first |
 | GET `/videos/{id}` | any | — | `Video` |
 | POST `/videos/{id}/publish` | owner | `{title, description, tags:[str], privacy:"private"\|"unlisted"\|"public"}` | **202** `{publish_status:"publishing"}`. Poll `/videos/{id}` (`publish_progress` 0–100) |
-| GET `/youtube/auth/url` | owner | — | `{url}` Google consent URL (frontend navigates to it) |
-| GET `/youtube/auth/start` | owner | — | 302 to Google consent (scopes `youtube.upload` + `youtube.readonly`) |
+| GET `/youtube/auth/url` | any | — | `{url}` Google consent URL (frontend navigates to it). Any visitor can connect their own channel |
 | GET `/youtube/auth/callback` | Google | `code, state` | 302 → `{FRONTEND_ORIGIN}/?youtube=connected#yt=<encrypted connection>` (or `/?youtube=error&reason=…`) |
-| POST `/youtube/disconnect` | owner | — | `{ok:true}` (frontend also forgets its encrypted copy) |
-| GET `/youtube/uploads` | any | — | `{channel_title, videos:[{id, title, url, published_at, thumbnail, privacy}]}` read live from the connected channel (newest first, max 25). 409 `youtube_not_connected` |
+| POST `/youtube/disconnect` | any | — | `{ok:true}`. Nothing is stored server-side; the browser forgets its connection |
+| GET `/youtube/uploads` | visitor | `X-YouTube-Auth` | `{channel_title, videos:[{id, title, url, published_at, thumbnail, privacy}]}`: the visitor's videos made with the app (description tag `#WhatsCookingApp`), read live from their channel. 409 `youtube_not_connected` |
 | GET `/usage` | any | — | `Usage` |
 | GET `/settings` | any | — | `Settings` |
 | PATCH `/settings` | owner | `{daily_veo_clip_limit? 0–50, monthly_cap_cents? 0–10000, free_mode?}` | `Settings` |
@@ -74,7 +74,7 @@ Fernet-encrypted with `APP_SECRET`). The frontend keeps it in `localStorage` and
 
 ```ts
 Restaurant { id, name, slug, logo_asset_id, logo_url, color_primary:"#RRGGBB", color_accent, voice_tone:"friendly"|"upbeat"|"elegant",
-             tts_voice, menu_count, has_sales, youtube_connected, youtube_channel_title, voices:[{id,label}] }
+             tts_voice, menu_count, has_sales, youtube_configured, youtube_connected (this visitor), youtube_channel_title, voices:[{id,label}] }
 
 MenuItem { id, name, price_cents|null, price:"$14.99"|null, description|null, category|null, photo_asset_id|null, photo_url|null }
 
@@ -103,8 +103,8 @@ Video { id, job_id, url, poster_url, dish, menu_item_id, duration_s, width, heig
         title, description, hashtags, youtube_id|null, youtube_url|null, youtube_privacy|null,
         publish_status:"draft"|"publishing"|"published"|"failed", publish_error|null, publish_progress, created_at }
 
-Usage { today:{clips, limit}, month:{est_cents, cap_cents}, cost_per_sec_cents, audio_cost_per_sec_cents, free_mode,
-        veo:{allowed, reason|null, message|null, est_cents} }   // veo = what would happen if this viewer asked for Veo now
+Usage { today:{clips, limit}, month:{est_cents, cap_cents}, cost_per_sec_cents, free_mode, ai_videos_left, ai_videos_total,
+        veo:{allowed, reason|null, message|null, est_cents} }   // "veo" = AI motion (field names kept from the Veo era): what would happen if this viewer asked for it now
 
 Settings { restaurant_id, daily_veo_clip_limit, monthly_cap_cents, free_mode, veo_cost_per_sec_cents }
 ```
@@ -117,13 +117,11 @@ POST /jobs → queued → running: analyze → [needs_dish ⇄ POST confirm-dish
 ```
 - Poll `GET /jobs/{id}` every 1.5 s until `done | failed | needs_dish`.
 - `script` is filled as soon as the Script stage finishes (before the video exists).
-- Visuals and voice **degrade instead of failing**: Veo problems → Ken Burns + `fallback_reason`;
+- Visuals and voice **degrade instead of failing**: AI-motion problems → Ken Burns + `fallback_reason`;
   TTS problems → captions-only + `flags.captions_only`.
 
 ## Mock / demo switches (no frontend changes needed)
 
-- `MOCK_PIPELINE=1`: stages walk on a timer (analyze 1.5 s, script 3 s, visuals 6 s / 12 s with Veo, voice 1.5 s,
+- `MOCK_PIPELINE=1`: stages walk on a timer (analyze 1.5 s, script 3 s, visuals 6 s / 12 s with AI motion, voice 1.5 s,
   assemble 2 s) and attach `seed/mock_short.mp4`. `MOCK_FAIL_RATE=0.1` fails a random stage. `MOCK_NEEDS_DISH=1`
   pauses photo jobs for the dish picker. `/insights` serves `seed/mock_insights.json`.
-- `DEMO_CACHE=1`: an owner's Veo job for the seeded Chicken Biryani replays `seed/hero_veo_short.mp4`
-  (a real Veo render made once with `make hero`) after an ~8 s stage timeline, with no new spend.

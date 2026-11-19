@@ -1,6 +1,6 @@
-"""Day-0 check (task 3): one real 8s Veo clip from a photo, timed. COSTS MONEY (~8 × VEO_COST_PER_SEC_CENTS).
+"""One real 8s AI-motion clip (VEO_MODEL, default Gemini Omni) from a photo, timed. COSTS MONEY.
 
-    backend/.venv/bin/python scripts/veo_smoke.py seed/photos/chicken-biryani.jpg [runs]
+    backend/.venv/bin/python scripts/video_smoke.py seed/photos/chicken-biryani.jpg [runs]
 """
 import asyncio
 import statistics
@@ -23,7 +23,7 @@ async def main():
     print(f"model={s.veo_model}  est cost/clip=${8 * s.veo_cost_per_sec_cents / 100:.2f}  runs={runs}")
     times = []
     for i in range(runs):
-        out = ROOT / f"veo_smoke_{i}.mp4"
+        out = ROOT / f"video_smoke_{i}.mp4"
         t = time.time()
         try:
             await veo.generate_clip(photo, "image/jpeg", default_veo_prompt(), out)
@@ -37,7 +37,7 @@ async def main():
         times.sort()
         p90 = times[min(len(times) - 1, int(round(0.9 * (len(times) - 1))))]
         print(f"latency: median {statistics.median(times):.0f}s, p90 {p90:.0f}s. "
-              + ("OK for a live demo." if p90 <= 90 else "Too slow for live: demo with DEMO_CACHE=1."))
+              + ("OK for a live demo." if p90 <= 90 else "Slow: expect 2-3 min per video."))
 
 
 asyncio.run(main())

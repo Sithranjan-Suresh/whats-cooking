@@ -140,6 +140,7 @@ def test_usage_and_settings_validation(client):
     assert u["veo"]["allowed"] is False and u["veo"]["reason"] == "demo_mode"
     u = client.get("/usage", headers=OWNER).json()
     assert u["veo"]["allowed"] is True
+    assert u["ai_videos_left"] == 10 and u["ai_videos_total"] == 15  # 10/day limit, $10 cap / 64¢
     assert client.patch("/settings", json={"daily_veo_clip_limit": 99}, headers=OWNER).status_code == 422
 
 
@@ -273,42 +274,36 @@ def test_any_restaurant_csv_creates_dishes_and_picks_one(client):
     assert names["top_seller"] == "Masala Dosa"
 
 
-def test_youtube_connection_survives_db_wipe_via_browser_copy(client, monkeypatch):
-    """Callback hands the browser an encrypted copy; after the server forgets, X-YouTube-Auth restores it."""
+def test_youtube_is_per_visitor(client, monkeypatch):
+    """Each browser holds its own encrypted connection; the server stores none, so visitors never share a channel."""
     from urllib.parse import unquote
 
-    from sqlmodel import Session, delete
-
-    from app.db import get_engine
-    from app.models import YouTubeAuth
     from app.services import youtube
 
     monkeypatch.setattr(youtube, "exchange_code", lambda code, state: {
-        "restaurant_id": 1, "refresh_token": "rt-123", "channel_id": "UC1", "channel_title": "Dosa House TV"})
+        "restaurant_id": 1, "refresh_token": "rt-raj", "channel_id": "UC1", "channel_title": "Raj Eats"})
     r = client.get("/youtube/auth/callback?code=x&state=y", follow_redirects=False)
     assert r.status_code == 302 and "youtube=connected#yt=" in r.headers["location"]
-    blob = unquote(r.headers["location"].split("#yt=", 1)[1])
-    assert "rt-123" not in blob  # encrypted
-    assert client.get("/restaurants/me").json()["youtube_channel_title"] == "Dosa House TV"
+    raj = unquote(r.headers["location"].split("#yt=", 1)[1])
+    assert "rt-raj" not in raj  # encrypted
 
-    with Session(get_engine()) as s:  # simulate the free host wiping its disk
-        s.exec(delete(YouTubeAuth))
-        s.commit()
+    # Raj sees his channel; another visitor (no header) sees nothing connected; garbage is ignored.
+    assert client.get("/restaurants/me", headers={"X-YouTube-Auth": raj}).json()["youtube_channel_title"] == "Raj Eats"
     assert client.get("/restaurants/me").json()["youtube_connected"] is False
-    me = client.get("/restaurants/me", headers={"X-YouTube-Auth": blob}).json()
-    assert me["youtube_connected"] is True and me["youtube_channel_title"] == "Dosa House TV"
-    # garbage blobs are ignored, never errors
-    assert client.get("/health", headers={"X-YouTube-Auth": "nope"}).status_code == 200
+    assert client.get("/restaurants/me", headers={"X-YouTube-Auth": "nope"}).json()["youtube_connected"] is False
 
     seen = {}
 
-    def fake_list(token, max_results=25, service=None):
+    def fake_list(token, max_results=50, known_ids=None, service=None):
         seen["token"] = token
-        return {"channel_title": "Dosa House TV", "videos": [{"id": "abc", "title": "Masala Dosa", "url": "https://youtube.com/shorts/abc",
-                                                              "published_at": "2026-11-18T00:00:00Z", "thumbnail": None, "privacy": "private"}]}
+        return {"channel_title": "Raj Eats", "videos": []}
 
     monkeypatch.setattr(youtube, "list_uploads", fake_list)
-    up = client.get("/youtube/uploads").json()
-    assert seen["token"] == "rt-123" and up["videos"][0]["id"] == "abc"
-    assert client.post("/youtube/disconnect", headers=OWNER).json() == {"ok": True}
+    assert client.get("/youtube/uploads", headers={"X-YouTube-Auth": raj}).status_code == 200 and seen["token"] == "rt-raj"
     assert client.get("/youtube/uploads").status_code == 409
+    # posting without your own connection is refused
+    vids = client.get("/videos").json()
+    if vids:
+        r = client.post(f"/videos/{vids[0]['id']}/publish", json={"title": "t"}, headers=OWNER)
+        assert r.json()["error"]["code"] == "youtube_not_connected"
+

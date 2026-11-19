@@ -41,11 +41,8 @@ def reset_engine() -> None:
     _engine = None
 
 
-# Lightweight forward-only migrations for columns added after the first deploy.
-MIGRATIONS = [
-    ("restaurant", "presenter_asset_id", "INTEGER REFERENCES asset(id)"),
-    ("settings", "veo_audio_cost_per_sec_cents", "INTEGER NOT NULL DEFAULT 15"),
-]
+# Lightweight forward-only migrations for columns added after the first deploy: (table, column, DDL).
+MIGRATIONS: list[tuple[str, str, str]] = []
 
 
 def init_db() -> None:
@@ -90,7 +87,6 @@ def get_app_settings(session: Session, restaurant_id: int) -> models.AppSettings
         st = models.AppSettings(
             restaurant_id=restaurant_id,
             veo_cost_per_sec_cents=cfg.veo_cost_per_sec_cents,
-            veo_audio_cost_per_sec_cents=cfg.veo_audio_cost_per_sec_cents,
         )
         session.add(st)
         session.commit()

@@ -18,6 +18,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",
 ]
 TOKEN_URI = "https://oauth2.googleapis.com/token"
+# Added to every description we post, so "On YouTube" lists only videos made with this app.
+APP_MARKER = "Made with What's Cooking? #WhatsCookingApp"
 
 
 class YouTubeError(Exception):
@@ -153,6 +155,7 @@ def upload(
     hashtags = " ".join("#" + t for t in clean_tags)
     if "#shorts" not in hashtags.lower():
         hashtags = (hashtags + " #Shorts").strip()
+    hashtags += f"\n\n{APP_MARKER}"
     body = {
         "snippet": {
             "title": title[:100] or "New dish",
@@ -201,8 +204,9 @@ def upload(
     return {"id": vid, "url": f"https://youtube.com/shorts/{vid}", "privacy": privacy_back}
 
 
-def list_uploads(refresh_token: str, *, max_results: int = 25, service=None) -> dict:
-    """The connected channel's own upload history (newest first), straight from YouTube."""
+def list_uploads(refresh_token: str, *, max_results: int = 50, known_ids: set | None = None, service=None) -> dict:
+    """Videos on the connected channel that were made with this app (newest first), straight from YouTube."""
+    known_ids = known_ids or set()
     if service is None:
         service = _service(credentials_from_refresh(refresh_token))
     ch = service.channels().list(part="snippet,contentDetails", mine=True).execute()
@@ -215,6 +219,8 @@ def list_uploads(refresh_token: str, *, max_results: int = 25, service=None) -> 
     for it in pl.get("items", []):
         vid = it["contentDetails"]["videoId"]
         sn = it.get("snippet", {})
+        if "WhatsCookingApp" not in (sn.get("description") or "") and vid not in known_ids:
+            continue  # the rest of the channel isn't ours to show
         thumbs = sn.get("thumbnails", {})
         thumb = (thumbs.get("medium") or thumbs.get("default") or {}).get("url")
         out.append({

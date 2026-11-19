@@ -1,6 +1,7 @@
 """Rendering: Ken Burns visuals, Veo+tail composition, ASS captions, end card, final assembly."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import os
@@ -355,6 +356,9 @@ def _sparkle_sprite(r: int, color: tuple[int, int, int]) -> Image.Image:
     return im.filter(ImageFilter.GaussianBlur(r * 0.55))
 
 
+CARD_FPS = 15  # painted at 15fps (PIL is the slow part), smoothed to 30fps by ffmpeg
+
+
 async def animated_end_card(
     work: Path,
     *,
@@ -366,13 +370,40 @@ async def animated_end_card(
     logo_path: Optional[Path],
     seconds: float = END_CARD_S + END_XFADE,
 ) -> Path:
-    """Logo reveal on a warm cream backdrop with drifting gold sparkles and a light sweep (≈3s, 30fps)."""
+    """Logo reveal on a warm cream backdrop with drifting gold sparkles and a light sweep (≈2.6s).
+
+    Frames are painted in a worker thread so the event loop (job polling, other requests) never stalls.
+    """
+    frames_dir = await asyncio.to_thread(
+        _paint_end_card, work, restaurant_name=restaurant_name, dish_name=dish_name, price=price,
+        color_primary=color_primary, color_accent=color_accent, logo_path=logo_path, seconds=seconds,
+    )
+    out = work / "endcard.mp4"
+    await ffmpeg(
+        ["-framerate", str(CARD_FPS), "-i", str(frames_dir / "f%04d.jpg"), "-vf", f"fps={FPS}", "-c:v", "libx264",
+         "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", str(out)],
+    )
+    shutil.rmtree(frames_dir, ignore_errors=True)
+    return out
+
+
+def _paint_end_card(
+    work: Path,
+    *,
+    restaurant_name: str,
+    dish_name: Optional[str],
+    price: Optional[str],
+    color_primary: str,
+    color_accent: str,
+    logo_path: Optional[Path],
+    seconds: float,
+) -> Path:
     import random
 
     rng = random.Random(restaurant_name)
     frames_dir = work / "card_frames"
     frames_dir.mkdir(exist_ok=True)
-    n = int(round(seconds * FPS))
+    n = int(round(seconds * CARD_FPS))
 
     # background: soft radial cream, very lightly tinted toward the brand color
     pr = _hex_to_rgb(color_primary)
@@ -445,7 +476,7 @@ async def animated_end_card(
 
     shine_w = 170
     for i in range(n):
-        t = i / FPS
+        t = i / CARD_FPS
         frame = bg.copy().convert("RGBA")
         for p in parts:
             yy = (p["y"] - p["vy"] * t) % (H + 40) - 20
@@ -485,14 +516,7 @@ async def animated_end_card(
                 im.putalpha(im.getchannel("A").point(lambda v, a=a: int(v * a)))
             frame.alpha_composite(im, ((W - layer.width) // 2, int(ly + 18 * (1 - a))))
         frame.convert("RGB").save(frames_dir / f"f{i:04d}.jpg", quality=90)
-
-    out = work / "endcard.mp4"
-    await ffmpeg(
-        ["-framerate", str(FPS), "-i", str(frames_dir / "f%04d.jpg"), "-c:v", "libx264", "-preset", "veryfast",
-         "-crf", "18", "-pix_fmt", "yuv420p", str(out)],
-    )
-    shutil.rmtree(frames_dir, ignore_errors=True)
-    return out
+    return frames_dir
 
 
 # ------------------------------------------------------------------ assemble

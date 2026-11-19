@@ -1,4 +1,4 @@
-"""Day-0 check (tasks 1-2): list the Gemini Flash + Veo models this API key can use.
+"""List the Gemini text and video models this API key can use (video = Gemini Omni or legacy Veo).
 
     backend/.venv/bin/python scripts/check_models.py
 Copy the IDs you want into .env as GEMINI_TEXT_MODEL and VEO_MODEL.
@@ -19,17 +19,17 @@ flash, veo = [], []
 for m in client.models.list():
     name = m.name.replace("models/", "")
     actions = getattr(m, "supported_actions", None) or []
-    if "veo" in name:
+    if "veo" in name or "omni" in name:
         veo.append((name, actions))
     elif "flash" in name and "generateContent" in actions and "image" not in name and "tts" not in name:
         flash.append((name, actions))
 print("Gemini Flash (text + vision):")
 for n, _ in sorted(flash):
     print("  ", n, "  <- current GEMINI_TEXT_MODEL" if n == s.gemini_text_model else "")
-print("\nVeo (video):")
+print("\nVideo (Gemini Omni / Veo):")
 for n, a in sorted(veo):
     print("  ", n, a, "  <- current VEO_MODEL" if n == s.veo_model else "")
 if s.gemini_text_model not in [n for n, _ in flash]:
     print(f"\n!! GEMINI_TEXT_MODEL={s.gemini_text_model} is not in the list above. Pick one.")
 if s.veo_model not in [n for n, _ in veo]:
-    print(f"!! VEO_MODEL={s.veo_model} is not in the list above. Pick one (prefer a 'fast'/'lite' variant).")
+    print(f"!! VEO_MODEL={s.veo_model} is not in the list above. Pick a gemini-omni-* model.")

@@ -1,4 +1,4 @@
-"""Job queue + stage machine (engineering spec §5.1).
+"""Job queue + stage machine.
 
 queued → analyze → [needs_dish?] → script → visuals → voice → assemble → done
 Any hard failure → failed (with stage + error). Visuals and voice degrade instead of failing.
@@ -27,7 +27,6 @@ from .util import fmt_price
 log = logging.getLogger("app.pipeline")
 
 STAGES = ["analyze", "script", "visuals", "voice", "assemble"]
-HERO_DISH_NORM = "chicken biryani"
 
 
 def initial_stages() -> list[dict]:
@@ -200,6 +199,7 @@ class Ctx:
                  "description": m.description}
                 for m in s.exec(select(MenuItem).where(MenuItem.restaurant_id == r.id)).all()
             ]
+        self.card_task: "Optional[asyncio.Task[Path]]" = None
         self.work = get_settings().media_dir / "work" / f"job_{job_id}"
         self.work.mkdir(parents=True, exist_ok=True)
 
@@ -213,8 +213,6 @@ async def run_job(job_id: int) -> None:
     try:
         if s.mock_pipeline:
             await run_mock(ctx)
-        elif _is_demo_cache(ctx):
-            await run_demo_cache(ctx)
         else:
             await run_real(ctx)
     except Paused:
@@ -224,6 +222,8 @@ async def run_job(job_id: int) -> None:
         _update_job(job_id, status="failed", error=e.message, error_stage=e.stage, finished_at=utcnow())
         budget.release(job_id)
     finally:
+        if ctx.card_task and not ctx.card_task.done():
+            ctx.card_task.cancel()
         if not s.mock_pipeline:
             _cleanup_work(ctx)
 
@@ -233,18 +233,6 @@ def _cleanup_work(ctx: Ctx) -> None:
         job = s.get(Job, ctx.job_id)
         if job and job.status in ("done", "failed"):
             shutil.rmtree(ctx.work, ignore_errors=True)
-
-
-def _is_demo_cache(ctx: Ctx) -> bool:
-    s = get_settings()
-    return bool(
-        s.demo_cache
-        and ctx.veo_requested
-        and not ctx.flags.get("demo")
-        and ctx.item
-        and ctx.item["name_norm"] == HERO_DISH_NORM
-        and (s.seed_dir / "hero_veo_short.mp4").exists()
-    )
 
 
 def _angle_metric(ctx: Ctx) -> Optional[str]:
@@ -271,8 +259,9 @@ async def run_real(ctx: Ctx) -> None:
     if stage_status(jid, "script") != "done" or not ctx.script:
         set_stage(jid, "script", "running")
         await _script(ctx)
-    # ---- Visuals
+    # ---- Visuals (the logo ending is painted meanwhile)
     set_stage(jid, "visuals", "running")
+    _start_end_card(ctx)
     visuals = await _visuals(ctx)
     # ---- Voice
     set_stage(jid, "voice", "running")
@@ -371,6 +360,18 @@ async def _script(ctx: Ctx) -> None:
     set_stage(jid, "script", "done", note or ("Grounded in your menu" if source != "template" else None))
 
 
+def _start_end_card(ctx: Ctx) -> "asyncio.Task[Path]":
+    """Paint the animated logo ending in the background (overlaps the slow AI-motion wait)."""
+    ctx.card_task = asyncio.create_task(render.animated_end_card(
+        ctx.work, restaurant_name=ctx.restaurant["name"],
+        dish_name=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("name"),
+        price=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("price"),
+        color_primary=ctx.restaurant["color_primary"], color_accent=ctx.restaurant["color_accent"],
+        logo_path=ctx.logo_path,
+    ))
+    return ctx.card_task
+
+
 async def _visuals(ctx: Ctx) -> Path:
     jid = ctx.job_id
     main_len = ctx.length_s - render.END_CARD_S
@@ -443,13 +444,7 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
         speech = (voice["timings"][0]["start"] + 0.3, voice["timings"][-1]["end"] + 0.3)
     ass = render.build_ass(ctx.script, main_len, color_primary=ctx.restaurant["color_primary"],
                            color_accent=ctx.restaurant["color_accent"], style=ctx.style, speech=speech)
-    card = await render.animated_end_card(
-        ctx.work, restaurant_name=ctx.restaurant["name"],
-        dish_name=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("name"),
-        price=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("price"),
-        color_primary=ctx.restaurant["color_primary"], color_accent=ctx.restaurant["color_accent"],
-        logo_path=ctx.logo_path,
-    )
+    card = await (ctx.card_task or _start_end_card(ctx))
     media = get_settings().media_dir
     out = media / "videos" / f"job_{jid}_{int(time.time())}.mp4"
     try:
@@ -542,22 +537,3 @@ async def run_mock(ctx: Ctx) -> None:
     if poster is None:
         poster = await render.extract_poster(out, s.media_dir / "posters" / (out.stem + ".jpg"))
     _finish(ctx, out, poster, await probe_video(out), mode="free", cost_cents=0)
-
-
-async def run_demo_cache(ctx: Ctx) -> None:
-    s = get_settings()
-    meta = {}
-    meta_path = s.seed_dir / "hero_veo_short.json"
-    if meta_path.exists():
-        meta = json.loads(meta_path.read_text())
-    script = meta.get("script")
-    times = [("analyze", 1.0), ("script", 2.0), ("visuals", 3.0), ("voice", 1.0), ("assemble", 1.0)]
-    await _timeline(ctx, times, script=script, notes={"analyze": "Dish confirmed", "script": "Grounded in your menu",
-                                                       "visuals": "AI motion",
-                                                       "voice": "Voice: neural",
-                                                       "assemble": "15s"})
-    out, poster = _copy_video(s.seed_dir / "hero_veo_short.mp4", ctx.job_id, "hero")
-    if poster is None:
-        poster = await render.extract_poster(out, s.media_dir / "posters" / (out.stem + ".jpg"))
-    _update_job(ctx.job_id, veo_used=True)
-    _finish(ctx, out, poster, await probe_video(out), mode="veo", cost_cents=int(meta.get("cost_cents", 64)))

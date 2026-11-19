@@ -21,6 +21,7 @@ from ..serializers import menu_item_out, restaurant_out
 from ..services import budget
 from ..services.tts import VOICES
 from ..util import normalize_name, parse_price_cents, sha256_file
+from ..viewer import viewer_youtube
 
 router = APIRouter()
 
@@ -55,15 +56,16 @@ class BrandPatch(BaseModel):
 
 
 @router.get("/restaurants/me")
-def get_me(session: Session = Depends(get_session)):
+def get_me(yt: Optional[dict] = Depends(viewer_youtube), session: Session = Depends(get_session)):
     r = current_restaurant(session)
-    out = restaurant_out(session, r)
+    out = restaurant_out(session, r, yt)
     out["voices"] = [{"id": k, "label": v} for k, v in VOICES.items()]
     return out
 
 
 @router.patch("/restaurants/me")
-def patch_me(body: BrandPatch, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+def patch_me(body: BrandPatch, actor: Actor = Depends(get_actor), yt: Optional[dict] = Depends(viewer_youtube),
+             session: Session = Depends(get_session)):
     require_owner(actor)
     r = current_restaurant(session)
     data = body.model_dump(exclude_unset=True)
@@ -82,7 +84,7 @@ def patch_me(body: BrandPatch, actor: Actor = Depends(get_actor), session: Sessi
     session.add(r)
     session.commit()
     session.refresh(r)
-    out = restaurant_out(session, r)
+    out = restaurant_out(session, r, yt)
     out["voices"] = [{"id": k, "label": v} for k, v in VOICES.items()]
     return out
 
@@ -219,6 +221,12 @@ def usage(actor: Actor = Depends(get_actor), session: Session = Depends(get_sess
     if reason in ("daily_limit", "monthly_cap"):
         message = budget.cap_message(session, r.id, reason, d.est_cost_cents)
     snap["veo"] = {"allowed": d.allowed and actor == "owner", "reason": reason, "message": message, "est_cents": d.est_cost_cents}
+    # How many more AI-motion videos fit under today's limit and the monthly cap (shown next to Action!).
+    per = max(1, d.est_cost_cents)
+    by_cap = max(0, snap["month"]["cap_cents"] - snap["month"]["est_cents"]) // per
+    by_day = max(0, snap["today"]["limit"] - snap["today"]["clips"])
+    snap["ai_videos_left"] = 0 if snap["free_mode"] else int(min(by_cap, by_day))
+    snap["ai_videos_total"] = int(snap["month"]["cap_cents"] // per)
     return snap
 
 

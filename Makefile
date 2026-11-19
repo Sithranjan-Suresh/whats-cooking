@@ -1,5 +1,5 @@
 PY := backend/.venv/bin/python
-.PHONY: setup back front seed eval test build secrets models hero docker
+.PHONY: setup back front seed eval test build secrets models docker
 
 setup:            ## install backend + frontend deps
 	python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements.txt
@@ -27,11 +27,8 @@ build:            ## production frontend build
 secrets:          ## print APP_SECRET + OWNER_TOKEN
 	$(PY) scripts/gen_secrets.py
 
-models:           ## list Gemini/Veo models for your key
+models:           ## list Gemini text/video models for your key
 	$(PY) scripts/check_models.py
-
-hero:             ## render the cached hero Veo video (costs 1 clip)
-	$(PY) scripts/make_hero.py
 
 docker:           ## build + run the API image locally
 	docker build -f backend/Dockerfile -t whats-cooking-api .

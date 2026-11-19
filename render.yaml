@@ -1,46 +1,29 @@
-# Render Blueprint: New → Blueprint → pick this repo. Fill the `sync: false` values in the dashboard.
+# Render Blueprint for the API (what the live demo runs on). New → Blueprint → this repo.
+# Free plan: 0.1 CPU, sleeps after 15 min idle, files reset on restart (seed data reloads automatically).
 services:
   - type: web
     name: whats-cooking-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
-    plan: starter            # needs a paid plan for the persistent disk (free instances also sleep)
+    plan: free
     healthCheckPath: /health
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 2
     envVars:
-      - key: DATA_DIR
-        value: /data
-      - key: DEMO_MODE
-        value: "0"           # single tester: everyone who opens the site can make videos (Veo still capped at $10)
-      - key: MOCK_PIPELINE
-        value: "0"
-      - key: DEMO_CACHE
-        value: "1"
-      - key: MOCK_FAIL_RATE
-        value: "0"
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_TEXT_MODEL
-        sync: false
-      - key: VEO_MODEL
-        sync: false
-      - key: VEO_COST_PER_SEC_CENTS
-        sync: false
-      - key: GOOGLE_OAUTH_CLIENT_ID
-        sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: OAUTH_REDIRECT_URI
-        sync: false        # https://<this-service>.onrender.com/youtube/auth/callback
-      - key: APP_SECRET
-        sync: false        # python scripts/gen_secrets.py
-      - key: OWNER_TOKEN
-        sync: false
-      - key: FRONTEND_ORIGIN
-        sync: false        # https://<your-app>.vercel.app
-      - key: PUBLIC_BASE_URL
-        sync: false        # https://<this-service>.onrender.com
+      - { key: DATA_DIR, value: /data }
+      - { key: DEMO_MODE, value: "0" }
+      - { key: MOCK_PIPELINE, value: "0" }
+      - { key: WORKERS, value: "1" }
+      - { key: RENDER_PRESET, value: ultrafast }
+      - { key: KB_OVERSAMPLE, value: "1" }
+      - { key: FFMPEG_TIMEOUT_S, value: "600" }
+      - { key: VEO_TIMEOUT_S, value: "300" }
+      - { key: SEED_RENDER, value: "0" }
+      - { key: GEMINI_TEXT_MODEL, value: gemini-3.5-flash }
+      - { key: VEO_MODEL, value: gemini-omni-1.2-flash }
+      - { key: GEMINI_API_KEY, sync: false }
+      - { key: GOOGLE_OAUTH_CLIENT_ID, sync: false }
+      - { key: GOOGLE_OAUTH_CLIENT_SECRET, sync: false }
+      - { key: OAUTH_REDIRECT_URI, sync: false }   # https://<service>.onrender.com/youtube/auth/callback
+      - { key: APP_SECRET, sync: false }           # make secrets
+      - { key: FRONTEND_ORIGIN, sync: false }      # https://<app>.vercel.app
+      - { key: PUBLIC_BASE_URL, sync: false }      # https://<service>.onrender.com

@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import useSWR from "swr";
 import { api, fetcher, getOwnerToken, onOwnerTokenChange, ApiError } from "@/lib/api";
-import type { Health, Job, Restaurant, Usage } from "@/lib/types";
+import type { Health, Job, Restaurant } from "@/lib/types";
 
-export function useOwnerToken() {
+function useOwnerToken() {
   return useSyncExternalStore(onOwnerTokenChange, getOwnerToken, () => null);
 }
 
@@ -18,18 +18,8 @@ export function useHealth() {
   });
 }
 
-export function useIsOwner() {
-  const { data } = useHealth();
-  return data?.actor === "owner";
-}
-
 export function useRestaurant() {
   return useSWR<Restaurant, ApiError>("/restaurants/me", fetcher, { errorRetryInterval: 3000 });
-}
-
-export function useUsage() {
-  const token = useOwnerToken();
-  return useSWR<Usage, ApiError>(["/usage", token], () => fetcher<Usage>("/usage"), { refreshInterval: 30000 });
 }
 
 const TERMINAL = new Set(["done", "failed", "needs_dish"]);

@@ -104,3 +104,36 @@ def test_oauth_state_roundtrip_and_tamper():
     assert youtube._verify(s)["r"] == 1
     with pytest.raises(youtube.YouTubeError):
         youtube._verify(s[:-2] + "00")
+
+
+class _Exec:
+    def __init__(self, v):
+        self.v = v
+
+    def execute(self):
+        return self.v
+
+
+class FakeListService:
+    def channels(self):
+        return self
+
+    def playlistItems(self):  # noqa: N802
+        return self
+
+    def list(self, **kw):
+        if "mine" in kw:
+            return _Exec({"items": [{"snippet": {"title": "Chan"}, "contentDetails": {"relatedPlaylists": {"uploads": "UU1"}}}]})
+        mk = lambda vid, desc: {"contentDetails": {"videoId": vid}, "snippet": {"title": vid, "description": desc}, "status": {}}  # noqa: E731
+        return _Exec({"items": [mk("app1", "Yum " + youtube.APP_MARKER), mk("personal", "my vlog"), mk("old", "posted before the tag")]})
+
+
+def test_list_uploads_only_shows_app_videos():
+    out = youtube.list_uploads("rt", known_ids={"old"}, service=FakeListService())
+    assert [v["id"] for v in out["videos"]] == ["app1", "old"]
+
+
+def test_upload_description_carries_marker(no_sleep):
+    svc = FakeService([(None, {"id": "z"})])
+    _up(svc, no_sleep)
+    assert youtube.APP_MARKER in svc.body["snippet"]["description"]

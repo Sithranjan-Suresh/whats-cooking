@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 from urllib.parse import quote
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -16,10 +16,10 @@ from ..auth import Actor, get_actor, require_owner
 from ..config import get_settings
 from ..db import current_restaurant, get_session, session_scope
 from ..errors import AppError
-from ..models import Video, YouTubeAuth, jdump
+from ..models import Video, jdump
 from ..serializers import video_out
 from ..services import youtube
-from ..util import decrypt, encrypt
+from ..viewer import encode_connection, viewer_youtube
 
 log = logging.getLogger("app.videos")
 router = APIRouter()
@@ -76,13 +76,6 @@ async def _publish_task(video_id: int, refresh_token: str, body: PublishBody) ->
     except youtube.YouTubeError as e:
         log.warning("publish failed: %s", e.message)
         _set_video(video_id, publish_status="failed", publish_error=e.message)
-        if e.code == "youtube_reconnect_required":
-            with session_scope() as s:
-                v = s.get(Video, video_id)
-                auth = s.get(YouTubeAuth, v.restaurant_id)
-                if auth:
-                    s.delete(auth)
-                    s.commit()
     except Exception as e:  # noqa: BLE001
         log.exception("publish crashed")
         _set_video(video_id, publish_status="failed", publish_error=f"Upload failed: {e}"[:300])
@@ -91,21 +84,23 @@ async def _publish_task(video_id: int, refresh_token: str, body: PublishBody) ->
 _tasks: set[asyncio.Task] = set()
 
 
+def _require_youtube(yt: Optional[dict]) -> dict:
+    if not yt:
+        raise AppError("youtube_not_connected", "Connect your YouTube channel first.", 409)
+    return yt
+
+
 @router.post("/videos/{video_id}/publish", status_code=202)
-async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
+async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_actor),
+                  yt: Optional[dict] = Depends(viewer_youtube), session: Session = Depends(get_session)):
+    """Posts to the *calling visitor's* channel (their browser's connection)."""
     require_owner(actor)
     v = session.get(Video, video_id)
     if not v:
         raise AppError("not_found", "Video not found", 404)
     if v.publish_status == "publishing":
-        raise AppError("already_publishing", "Already publishing.", 409)
-    auth = session.get(YouTubeAuth, v.restaurant_id)
-    if not auth:
-        raise AppError("youtube_not_connected", "Connect YouTube first.", 409)
-    try:
-        token = decrypt(auth.refresh_token)
-    except RuntimeError as e:
-        raise AppError("youtube_reconnect_required", "Reconnect YouTube in Settings.", 409) from e
+        raise AppError("already_publishing", "Already posting this one.", 409)
+    token = _require_youtube(yt)["rt"]
     v.publish_status = "publishing"
     v.publish_error = None
     v.publish_progress = 0
@@ -120,12 +115,11 @@ async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_a
     return JSONResponse({"publish_status": "publishing"}, status_code=202)
 
 
-# ------------------------------------------------------------------ YouTube OAuth
+# ------------------------------------------------------------------ YouTube OAuth (per visitor)
 
 @router.get("/youtube/auth/url")
-def yt_auth_url(actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
-    """Owner-only: returns the Google consent URL (the frontend then navigates to it)."""
-    require_owner(actor)
+def yt_auth_url(session: Session = Depends(get_session)):
+    """Google consent URL; the frontend navigates to it. Anyone can connect their own channel."""
     r = current_restaurant(session)
     try:
         return {"url": youtube.auth_url(r.id)}
@@ -133,20 +127,8 @@ def yt_auth_url(actor: Actor = Depends(get_actor), session: Session = Depends(ge
         raise AppError(e.code, e.message, 400) from e
 
 
-@router.get("/youtube/auth/start")
-def yt_start(actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
-    """Same as /youtube/auth/url but answers with a 302 (for curl / scripts that send X-Owner-Token)."""
-    require_owner(actor)
-    r = current_restaurant(session)
-    try:
-        return RedirectResponse(youtube.auth_url(r.id), status_code=302)
-    except youtube.YouTubeError as e:
-        raise AppError(e.code, e.message, 400) from e
-
-
 @router.get("/youtube/auth/callback")
-def yt_callback(code: str | None = None, state: str | None = None, error: str | None = None,
-                session: Session = Depends(get_session)):
+def yt_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     front = get_settings().frontend_origin.split(",")[0].strip().rstrip("/")
     if error or not code or not state:
         return RedirectResponse(f"{front}/?youtube=error&reason={error or 'missing_code'}", status_code=302)
@@ -157,47 +139,27 @@ def yt_callback(code: str | None = None, state: str | None = None, error: str | 
     except Exception:  # noqa: BLE001
         log.exception("oauth exchange failed")
         return RedirectResponse(f"{front}/?youtube=error&reason=exchange_failed", status_code=302)
-    auth = session.get(YouTubeAuth, info["restaurant_id"]) or YouTubeAuth(
-        restaurant_id=info["restaurant_id"], refresh_token="")
-    auth.refresh_token = encrypt(info["refresh_token"])
-    auth.channel_id = info["channel_id"]
-    auth.channel_title = info["channel_title"]
-    session.add(auth)
-    session.commit()
-    # Free hosting wipes the DB on restart, so the browser also keeps an encrypted copy (in the URL
-    # fragment, which never reaches server logs) and sends it back as X-YouTube-Auth to restore it.
-    blob = encrypt(json.dumps({"rt": info["refresh_token"], "cid": info["channel_id"], "ct": info["channel_title"]}))
+    # Handed to this visitor's browser only (URL fragment never reaches server logs); not stored server-side.
+    blob = encode_connection(info["refresh_token"], info["channel_id"], info["channel_title"])
     return RedirectResponse(f"{front}/?youtube=connected#yt={quote(blob)}", status_code=302)
 
 
 @router.get("/youtube/uploads")
-async def yt_uploads(session: Session = Depends(get_session)):
-    """Upload history read live from the connected channel (survives server restarts)."""
+async def yt_uploads(yt: Optional[dict] = Depends(viewer_youtube), session: Session = Depends(get_session)):
+    """This visitor's videos made with What's Cooking?, read live from their channel."""
+    token = _require_youtube(yt)["rt"]
     r = current_restaurant(session)
-    auth = session.get(YouTubeAuth, r.id)
-    if not auth:
-        raise AppError("youtube_not_connected", "Connect YouTube first.", 409)
+    known = {v.youtube_id for v in session.exec(select(Video).where(Video.restaurant_id == r.id)).all() if v.youtube_id}
     try:
-        token = decrypt(auth.refresh_token)
-        return await asyncio.to_thread(youtube.list_uploads, token)
+        return await asyncio.to_thread(youtube.list_uploads, token, known_ids=known)
     except youtube.YouTubeError as e:
-        if e.code == "youtube_reconnect_required":
-            session.delete(auth)
-            session.commit()
         raise AppError(e.code, e.message, 409) from e
-    except RuntimeError as e:
-        raise AppError("youtube_reconnect_required", "Reconnect YouTube.", 409) from e
     except Exception as e:  # noqa: BLE001
         log.warning("list uploads failed: %s", e)
         raise AppError("youtube_error", "Couldn't load your YouTube videos right now.", 502, retryable=True) from e
 
 
 @router.post("/youtube/disconnect")
-def yt_disconnect(actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
-    require_owner(actor)
-    r = current_restaurant(session)
-    auth = session.get(YouTubeAuth, r.id)
-    if auth:
-        session.delete(auth)
-        session.commit()
+def yt_disconnect():
+    """Nothing is stored server-side; the browser forgets its own connection."""
     return {"ok": True}

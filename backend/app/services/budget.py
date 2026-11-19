@@ -45,20 +45,15 @@ def usage_snapshot(session: Session, restaurant_id: int, today: Optional[date] =
         "today": {"clips": clips_today, "limit": st.daily_veo_clip_limit},
         "month": {"est_cents": month_cents, "cap_cents": st.monthly_cap_cents},
         "cost_per_sec_cents": st.veo_cost_per_sec_cents,
-        "audio_cost_per_sec_cents": st.veo_audio_cost_per_sec_cents,
         "free_mode": st.free_mode,
     }
 
 
-def rate_cents(st: AppSettings, audio: bool) -> int:
-    return st.veo_audio_cost_per_sec_cents if audio else st.veo_cost_per_sec_cents
-
-
-def check(session: Session, restaurant_id: int, seconds: int = 8, today: Optional[date] = None, *, audio: bool = False) -> Decision:
+def check(session: Session, restaurant_id: int, seconds: int = 8, today: Optional[date] = None) -> Decision:
     """Read-only preview of what reserve_veo would decide (used by the UI)."""
     st = get_app_settings(session, restaurant_id)
     snap = usage_snapshot(session, restaurant_id, today)
-    est = seconds * rate_cents(st, audio)
+    est = seconds * st.veo_cost_per_sec_cents
     if st.free_mode:
         return Decision(False, "free_mode", est)
     if snap["today"]["clips"] >= st.daily_veo_clip_limit:
@@ -68,12 +63,12 @@ def check(session: Session, restaurant_id: int, seconds: int = 8, today: Optiona
     return Decision(True, None, est)
 
 
-def reserve_veo(restaurant_id: int, job_id: int, seconds: int = 8, today: Optional[date] = None, *, audio: bool = False) -> Decision:
+def reserve_veo(restaurant_id: int, job_id: int, seconds: int = 8, today: Optional[date] = None) -> Decision:
     today = today or _today()
     with _lock:
         with Session(get_engine()) as session:
             st: AppSettings = get_app_settings(session, restaurant_id)
-            est = seconds * rate_cents(st, audio)
+            est = seconds * st.veo_cost_per_sec_cents
             if st.free_mode:
                 return Decision(False, "free_mode", est)
             rows = session.exec(

@@ -11,9 +11,9 @@ import type { InsightCard, InsightsResponse, MenuItem, Restaurant, SalesImportRe
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Button, ErrorCallout, Field, inputCls, Modal, Spinner, Toaster, useToast } from "@/components/ui";
-import { PhotoDrop, validatePhoto } from "@/components/studio";
-import { GenerateButton, PlayerStage } from "@/components/themed/studio";
-import { Celebration } from "@/components/themed/library";
+import { PhotoDrop, validatePhoto } from "@/components/player";
+import { GenerateButton, PlayerStage } from "@/components/stage";
+import { Celebration } from "@/components/celebration";
 import { BulbRow } from "@/components/BulbRow";
 import { fanfare } from "@/lib/sfx";
 
@@ -55,7 +55,15 @@ function App() {
     }
     const yt = params.get("youtube");
     if (yt === "connected") toast("YouTube connected. Hit Post to YouTube.", "ok");
-    if (yt === "error") toast(`YouTube connection failed (${params.get("reason") ?? "unknown"})`, "bad");
+    if (yt === "error") {
+      const reason = params.get("reason") ?? "unknown";
+      toast(
+        reason === "access_denied"
+          ? "Google didn't allow that connection. If it said the app is in testing, the app owner needs to open it to everyone (or add your Google account as a tester)."
+          : `YouTube connection failed (${reason}). Try Connect YouTube again.`,
+        "bad",
+      );
+    }
     if (yt || hash) window.history.replaceState(null, "", "/");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -260,7 +268,10 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
     }
   };
 
+  const usage = useSWR<{ ai_videos_left: number; ai_videos_total: number }, ApiError>("/usage", fetcher, { refreshInterval: 30000 });
+  const aiLeft = usage.data?.ai_videos_left;
   const start = async (veo = true) => {
+    if (aiLeft === 0) veo = false; // budget used up: make it with free photo motion instead of failing
     setCreating(true);
     setError(null);
     try {
@@ -274,6 +285,7 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
       }
       const r = await api<{ job_id: number }>("/jobs", { json: { mode: "menu", menu_item_id: menuItemId, length_s: 8, style: "bold", veo } });
       onStarted(r.job_id);
+      usage.mutate();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setError(e as ApiError);
@@ -362,6 +374,13 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
       )}
 
       <GenerateButton onClick={() => start(true)} disabled={!ready || busy} loading={creating} />
+      {usage.data && (
+        <p className={cx("mt-2 text-center font-mono text-[11px]", aiLeft === 0 ? "text-gold" : "text-muted")}>
+          {aiLeft === 0
+            ? "AI motion budget used up · videos now use free photo motion"
+            : `✦ AI videos left: ${aiLeft} of ${usage.data.ai_videos_total} (shared $10 test budget)`}
+        </p>
+      )}
       {!ready && (
         <p className="mt-2 text-center text-xs text-muted">
           {source === "photo"
@@ -513,6 +532,13 @@ function ResultPanel({
   }, [job?.status]);
   const running = job?.stages.find((s) => s.status === "running");
   const doneCount = job?.stages.filter((s) => s.status === "done").length ?? 0;
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
+  const elapsed = job ? Math.max(0, Math.round((now - new Date(job.created_at).getTime()) / 1000)) : 0;
 
   return (
     <div>
@@ -522,7 +548,19 @@ function ResultPanel({
           <div className="h-1.5 overflow-hidden rounded-full bg-panel2">
             <motion.div className="h-full bg-gold" animate={{ width: `${Math.max(8, (doneCount / 5) * 100)}%` }} transition={{ duration: 0.6 }} />
           </div>
-          <div className="mt-2 text-center font-mono text-xs text-muted">{running?.note || "Rolling…"} · about a minute</div>
+          <ol className="mt-3 space-y-1 font-mono text-[11px]">
+            {(job?.stages ?? []).map((st) => (
+              <li key={st.name} className={cx("flex justify-between gap-2", st.status === "done" ? "text-ok" : st.status === "running" ? "text-gold" : "text-muted/60")}>
+                <span>
+                  {st.status === "done" ? "✓" : st.status === "running" ? "●" : "○"} {STEP_LABEL[st.name] ?? st.name}
+                </span>
+                <span>{STEP_ETA[st.name]}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-2 text-center font-mono text-[11px] text-muted">
+            {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} · usually 2–3 min on our free server
+          </div>
         </div>
       )}
       {job?.status === "failed" && (
@@ -551,6 +589,15 @@ function ResultPanel({
     </div>
   );
 }
+
+const STEP_LABEL: Record<string, string> = {
+  analyze: "Reading your dish",
+  script: "Writing the script",
+  visuals: "Animating it with AI",
+  voice: "Recording the narrator",
+  assemble: "Final cut: captions, music, logo",
+};
+const STEP_ETA: Record<string, string> = { analyze: "~10s", script: "~10s", visuals: "~1–1.5 min", voice: "~5s", assemble: "~30s" };
 
 function PostButton({ v, r, ytConfigured, onChanged, full }: { v: Video; r: Restaurant; ytConfigured: boolean; onChanged: () => void; full?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -602,7 +649,7 @@ function PostButton({ v, r, ytConfigured, onChanged, full }: { v: Video; r: Rest
 
 function PostDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; onDone: () => void }) {
   const [title, setTitle] = useState(v.title ?? v.dish ?? "");
-  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("public");
+  const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("unlisted");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const toast = useToast();
@@ -826,7 +873,7 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
       await api("/youtube/disconnect", { method: "POST" });
       setYtBlob(null);
       await restaurant.mutate();
-      toast("YouTube disconnected. Connect again to pick a channel.", "info");
+      toast("Disconnected on this device.", "info");
     } catch (e) {
       toast((e as Error).message, "bad");
     } finally {
@@ -839,15 +886,15 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
         <span className="grid h-7 w-10 shrink-0 place-items-center rounded-md bg-[#ff0033] text-[11px] font-bold text-white">▶</span>
         {r.youtube_connected ? (
           <span className="truncate text-cream">
-            Posting to <b>{r.youtube_channel_title ?? "your channel"}</b>
+            Posting to <b>{r.youtube_channel_title ?? "your channel"}</b> <span className="text-muted">· only on this device</span>
           </span>
         ) : (
-          <span className="text-muted">YouTube not connected</span>
+          <span className="text-muted">Connect your own YouTube channel to post videos there.</span>
         )}
       </div>
       {r.youtube_connected ? (
         <Button variant="ghost" className="min-h-[36px]" onClick={disconnect} loading={busy}>
-          Switch channel
+          Disconnect
         </Button>
       ) : (
         <Button className="min-h-[36px]" onClick={connect} loading={busy}>
