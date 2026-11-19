@@ -7,7 +7,8 @@ import useSWR from "swr";
 import { motion } from "framer-motion";
 import { acceptYouTubeConnection, api, fetcher, setYtBlob, startYouTubeConnect, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
-import type { InsightCard, InsightsResponse, Job, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
+import type { InsightCard, InsightsResponse, Job, MenuItem, Restaurant, SalesImportResult, Storyboard, Video } from "@/lib/types";
+import { DirectorPanel } from "@/components/director";
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Button, ErrorCallout, Field, inputCls, Modal, Spinner, Toaster, useToast } from "@/components/ui";
@@ -41,6 +42,7 @@ function App() {
   const restaurant = useRestaurant();
   const health = useHealth();
   const [jobId, setJobId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<string | null>(null); // Director mode preview frame, shown in the player
   const { job, error: jobError, refresh } = useJob(jobId);
   const busy = !!job && !jobError && ["queued", "running"].includes(job.status);
 
@@ -84,6 +86,7 @@ function App() {
 
   const track = (id: number) => {
     setJobId(id);
+    setPreview(null);
     try {
       window.localStorage.setItem(LAST_JOB, String(id));
     } catch {
@@ -122,11 +125,11 @@ function App() {
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0 space-y-6">
               <StepLogo r={restaurant.data} onChange={() => restaurant.mutate()} />
-              <StepDish onStarted={track} busy={busy} />
+              <StepDish onStarted={track} busy={busy} onPreview={setPreview} />
               <StepYouTube r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
             <div className={cx("lg:sticky lg:top-8 lg:order-none lg:self-start", jobId ? "order-first" : "order-last")}>
-              <ResultPanel jobId={jobId} job={job} jobError={jobError} refresh={refresh} onRetried={track} busy={busy} r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
+              <ResultPanel jobId={jobId} job={job} jobError={jobError} refresh={refresh} onRetried={track} busy={busy} preview={preview} r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
           </div>
           <History r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
@@ -283,8 +286,13 @@ function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
 
 // ---------------------------------------------------------------- 2. pick the dish
 
-function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: boolean }) {
+function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => void; busy: boolean; onPreview: (url: string | null) => void }) {
   const [source, setSource] = useState<"csv" | "photo">("photo");
+  // Director mode: plan the Short in a chat before rendering
+  const [mode, setMode] = useState<"quick" | "director">("quick");
+  const [directed, setDirected] = useState<{ id: number; name: string; key: string } | null>(null);
+  const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [creating, setCreating] = useState(false);
   // photo path
@@ -323,6 +331,38 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
     }
   };
 
+  // The dish the director is working on; editing the dish afterwards starts a fresh plan.
+  const dishKey = source === "photo" ? JSON.stringify([source, photo?.id, name.trim(), price.trim(), desc.trim()]) : JSON.stringify([source, chosen?.id, photo?.id]);
+  useEffect(() => {
+    if (directed && directed.key !== dishKey) {
+      setDirected(null);
+      setStoryboard(null);
+      onPreview(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dishKey]);
+  const ensureDish = async (): Promise<number> => {
+    if (source === "photo") {
+      const d = await api<MenuItem>("/dishes", { json: { name: name.trim(), price: price.trim() || null, description: desc.trim() || null, photo_asset_id: photo!.id } });
+      return d.id;
+    }
+    const id = chosen!.menu_item.id;
+    if (photo) await api(`/menu/${id}/photo`, { json: { asset_id: photo.id } });
+    return id;
+  };
+  const openDirector = async () => {
+    setOpening(true);
+    setError(null);
+    try {
+      const id = await ensureDish();
+      setDirected({ id, name: source === "photo" ? name.trim() : chosen!.menu_item.name, key: dishKey });
+    } catch (e) {
+      setError(e as ApiError);
+    } finally {
+      setOpening(false);
+    }
+  };
+
   const usage = useSWR<{ ai_videos_left: number; ai_videos_total: number }, ApiError>("/usage", fetcher, { refreshInterval: 30000 });
   const aiLeft = usage.data?.ai_videos_left;
   const start = async (veo = true) => {
@@ -330,15 +370,11 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
     setCreating(true);
     setError(null);
     try {
-      let menuItemId: number;
-      if (source === "photo") {
-        const d = await api<MenuItem>("/dishes", { json: { name: name.trim(), price: price.trim() || null, description: desc.trim() || null, photo_asset_id: photo!.id } });
-        menuItemId = d.id;
-      } else {
-        menuItemId = chosen!.menu_item.id;
-        if (photo) await api(`/menu/${menuItemId}/photo`, { json: { asset_id: photo.id } });
-      }
-      const r = await api<{ job_id: number }>("/jobs", { json: { mode: "menu", menu_item_id: menuItemId, length_s: 8, style: "bold", veo } });
+      const directing = mode === "director" && directed && storyboard;
+      const menuItemId = directing ? directed!.id : await ensureDish();
+      const r = await api<{ job_id: number }>("/jobs", {
+        json: { mode: "menu", menu_item_id: menuItemId, length_s: 8, style: "bold", veo, ...(directing ? { storyboard } : {}) },
+      });
       onStarted(r.job_id);
       usage.mutate();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -351,7 +387,8 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
 
   const csvReady = !!chosen && (!!chosen.menu_item.photo_url || !!photo);
   const photoReady = !!photo && name.trim().length > 0;
-  const ready = source === "photo" ? photoReady : csvReady;
+  const dishReady = source === "photo" ? photoReady : csvReady;
+  const ready = mode === "director" ? dishReady && !!directed && !!storyboard : dishReady;
   const capHit = error?.code === "budget_cap_reached";
 
   return (
@@ -445,6 +482,38 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
         </div>
       )}
 
+      <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg p-1 text-sm font-semibold" role="group" aria-label="How to make it">
+        {(
+          [
+            ["quick", "⚡ Quick take", "AI plans it, one tap"],
+            ["director", "🎬 Director mode", "Plan it together first"],
+          ] as const
+        ).map(([k, label, sub]) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={mode === k}
+            onClick={() => setMode(k)}
+            className={cx("min-h-[52px] rounded-lg px-2 transition", mode === k ? "bg-panel2 text-gold shadow" : "text-muted hover:text-cream")}
+          >
+            {label}
+            <span className="block text-[11px] font-normal text-muted">{sub}</span>
+          </button>
+        ))}
+      </div>
+      {mode === "director" &&
+        (directed ? (
+          <DirectorPanel menuItemId={directed.id} dishName={directed.name} storyboard={storyboard} onStoryboard={setStoryboard} onPreview={onPreview} />
+        ) : (
+          <div className="mt-4 rounded-xl border border-dashed border-gold/40 p-4 text-center">
+            <p className="text-sm text-cream">Plan your Short with an AI director: pick the mood, what the camera shows and what the narrator says, then render.</p>
+            <Button className="mt-3" onClick={openDirector} loading={opening} disabled={!dishReady}>
+              Start directing →
+            </Button>
+            {!dishReady && <p className="mt-2 text-xs text-muted">Add the dish above first.</p>}
+          </div>
+        ))}
+
       <GenerateButton onClick={() => start(true)} disabled={!ready || busy} loading={creating} />
       {usage.data && (
         <p className={cx("mt-2 text-center font-mono text-[11px]", aiLeft === 0 ? "text-gold" : "text-muted")}>
@@ -455,7 +524,11 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
       )}
       {!ready && (
         <p className="mt-2 text-center text-xs text-muted">
-          {source === "photo"
+          {mode === "director" && dishReady
+            ? directed
+              ? "The director is drafting your storyboard…"
+              : "Start directing to plan your Short."
+            : source === "photo"
             ? photo
               ? "Give the dish a name."
               : "Add a dish photo and its name."
@@ -586,6 +659,7 @@ function ResultPanel({
   refresh,
   onRetried,
   busy,
+  preview,
   r,
   ytConfigured,
 }: {
@@ -595,6 +669,7 @@ function ResultPanel({
   refresh: () => void;
   onRetried: (id: number) => void;
   busy: boolean;
+  preview: string | null;
   r: Restaurant;
   ytConfigured: boolean;
 }) {
@@ -614,6 +689,7 @@ function ResultPanel({
   }, [busy]);
   const elapsed = job ? Math.max(0, Math.round((now - new Date(job.created_at).getTime()) / 1000)) : 0;
   const ai = !!job?.veo_requested;
+  const showPreview = !!preview && !busy; // Director mode: show the planned shot until the next take starts
   const label = (name: string) => (name === "visuals" && !ai ? "Animating your photo" : STEP_LABEL[name] ?? name);
   const eta = (name: string) => (name === "visuals" && !ai ? "~30s" : STEP_ETA[name]);
   const [retrying, setRetrying] = useState(false);
@@ -633,7 +709,7 @@ function ResultPanel({
 
   return (
     <div>
-      <PlayerStage job={job} previewImg={null} busy={busy} />
+      <PlayerStage job={showPreview ? null : job} previewImg={showPreview ? preview : null} busy={busy} />
       {busy && (
         <div className="mx-auto mt-4 max-w-[320px]">
           <div className="h-1.5 overflow-hidden rounded-full bg-panel2">

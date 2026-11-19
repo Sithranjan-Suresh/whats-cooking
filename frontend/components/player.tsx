@@ -9,12 +9,14 @@ export function PhonePlayer({
   placeholder,
   playing,
   overlay,
+  dim = true,
 }: {
   src?: string | null;
   poster?: string | null;
   placeholder?: string | null;
   playing?: boolean;
   overlay?: React.ReactNode;
+  dim?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
@@ -70,7 +72,7 @@ export function PhonePlayer({
         <div className="relative h-full w-full">
           {placeholder ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={placeholder} alt="" className="h-full w-full object-cover opacity-60" />
+            <img src={placeholder} alt="" className={cx("h-full w-full object-cover", dim && "opacity-60")} />
           ) : (
             <div className="grain h-full w-full bg-panel" />
           )}

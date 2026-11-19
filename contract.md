@@ -67,7 +67,9 @@ stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_ti
 | GET `/insights` | any | — | `{batch_id, cards: InsightCard[]}` (computed on first call if sales exist) |
 | POST `/insights/refresh` | owner | — | same as GET |
 | GET `/insights/{id}` | any | — | `InsightCard` |
-| POST `/jobs` | any (fair-use limits) | `{mode:"photo"\|"insight"\|"menu", photo_asset_id?, menu_item_id?, insight_id?, style:"bold"\|"warm"\|"minimal", length_s:8\|15\|30 (default 8), veo:bool}` | **202** `{job_id}`. **402 `budget_cap_reached`** if `veo:true` would exceed the daily limit or monthly cap (message says how much is left) |
+| POST `/jobs` | any (fair-use limits) | `{mode:"photo"\|"insight"\|"menu", photo_asset_id?, menu_item_id?, insight_id?, style:"bold"\|"warm"\|"minimal", length_s:8\|15\|30 (default 8), veo:bool, storyboard?: Storyboard}` (`storyboard` = Director mode: mode `menu`, 8 s; re-validated, 422 `not_grounded` if it doesn't match the menu; the script stage is skipped) | **202** `{job_id}`. **402 `budget_cap_reached`** if `veo:true` would exceed the daily limit or monthly cap (message says how much is left) |
+| POST `/director/plan` | any (60/h per visitor) | `{menu_item_id, message?: str ≤400, storyboard?: Storyboard, history?: [{role:"user"\|"assistant", text}] ≤24}` | `{storyboard: Storyboard, reply, suggestions:[str×3], source:"gemini"\|"unchanged"\|"template"}`. No `message` = first plan. Plans pass the same grounding validator as scripts; a request that would break it keeps the current storyboard (`unchanged`) and `reply` says why |
+| POST `/director/preview` | any (10/h per visitor, 40/day total) | `{menu_item_id, storyboard}` | `{url}`: a 9:16 still of the planned shot (image model, a few cents). 503 `ai_unavailable` without Gemini; 502 `preview_failed` (retryable) |
 | GET `/jobs` | any | `?status=active` → queued/running/needs_dish only | `Job[]` (newest first, max 30) |
 | GET `/jobs/{id}` | any | — | `Job` |
 | POST `/jobs/{id}/confirm-dish` | any | `{menu_item_id: int \| null, continue_anyway?: bool}` | `{ok:true}`. Resumes a `needs_dish` job. `null` = "Not on menu" (script omits price) |
@@ -123,6 +125,8 @@ Video { id, job_id, url, poster_url, dish, menu_item_id, duration_s, width, heig
 
 Usage { today:{clips, limit}, month:{est_cents, cap_cents}, cost_per_sec_cents, free_mode, ai_videos_left, ai_videos_total,
         veo:{allowed, reason|null, message|null, est_cents} }   // "veo" = AI motion (field names kept from the Veo era): what would happen if this viewer asked for it now
+
+Storyboard { hook, beats:[{caption, seconds}], voiceover, shot (one plain sentence for the owner), veo_prompt, title, description, hashtags, facts_used }
 
 Settings { restaurant_id, daily_veo_clip_limit, monthly_cap_cents, free_mode, veo_cost_per_sec_cents }
 ```

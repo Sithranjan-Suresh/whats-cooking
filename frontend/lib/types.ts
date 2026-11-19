@@ -188,3 +188,26 @@ export interface AppSettings {
   free_mode: boolean;
   veo_cost_per_sec_cents: number;
 }
+
+// ---------------------------------------------------------------- Director mode
+export interface Storyboard {
+  hook: string;
+  beats: { caption: string; seconds: number; facts?: string[] }[];
+  voiceover: string;
+  shot: string;
+  veo_prompt: string;
+  title: string;
+  description: string;
+  hashtags: string[];
+  facts_used?: { field: string; value: string }[];
+}
+export interface DirectorTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+export interface DirectorPlan {
+  storyboard: Storyboard;
+  reply: string;
+  suggestions: string[];
+  source: "gemini" | "unchanged" | "template";
+}

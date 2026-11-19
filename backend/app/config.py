@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     max_queued_jobs: int = 4
     uploads_per_hour_per_ip: int = 40   # photos/logos/CSVs are stored in the DB: keep one visitor from filling it
     photo_max_px: int = 1600            # stored photo size (720p video needs far less; keeps the DB small)
+    # Director mode
+    director_image_model: str = "gemini-3.1-flash-image"
+    director_plans_per_hour_per_ip: int = 60
+    director_previews_per_hour_per_ip: int = 10
+    director_previews_per_day: int = 40  # all visitors together (~4¢ each)
 
     @property
     def media_dir(self) -> Path:

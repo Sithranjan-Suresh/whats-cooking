@@ -37,6 +37,22 @@ def _rate_limit(ip: str) -> None:
     q.append(now)
 
 
+def _director_script(session: Session, body: "JobCreate", menu_item_id: Optional[int], stages: list) -> tuple[str, list]:
+    """A storyboard from the browser is untrusted: normalize it and run the grounding validator again."""
+    from ..services import director, scripts as sc
+
+    if body.mode != "menu" or not menu_item_id or body.length_s != director.LENGTH_S:
+        raise AppError("validation_error", "Director mode makes 8-second videos of a menu dish.", 422)
+    item = session.get(MenuItem, menu_item_id)
+    sb, problems = director.finalize(body.storyboard, sc.menu_row_for(item))
+    if problems:
+        raise AppError("not_grounded", "This plan doesn't match the menu: " + "; ".join(problems), 422)
+    for st in stages:
+        if st["name"] == "script":
+            st["status"], st["note"] = "done", "Your Director mode plan"
+    return jdump({**sb, "source": "director"}), stages
+
+
 def client_ip(request: Request) -> str:
     """The visitor's address. Render sits behind Cloudflare, which sets CF-Connecting-IP itself."""
     for h in ("cf-connecting-ip", "true-client-ip"):
@@ -94,6 +110,7 @@ class JobCreate(BaseModel):
     style: Literal["bold", "warm", "minimal"] = "bold"
     length_s: Literal[8, 15, 30] = 8
     veo: bool = False
+    storyboard: Optional[dict] = None  # Director mode: the approved plan (re-checked against the menu here)
 
 
 @router.post("/jobs", status_code=202)
@@ -128,12 +145,16 @@ def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_act
         if not d.allowed and d.reason in ("daily_limit", "monthly_cap"):
             raise AppError("budget_cap_reached", budget.cap_message(session, r.id, d.reason, d.est_cost_cents), 402)
     flags = {"demo": actor != "owner"}
+    stages, script_json = initial_stages(), None
+    if body.storyboard is not None:
+        script_json, stages = _director_script(session, body, menu_item_id, stages)
+        flags["director"] = True
     job = Job(
         restaurant_id=r.id, mode=body.mode, menu_item_id=menu_item_id if body.mode != "photo" else body.menu_item_id,
         photo_asset_id=photo_asset_id, insight_id=body.insight_id if body.mode == "insight" else None,
         angle=angle, style=body.style, length_s=body.length_s,
-        veo_requested=bool(body.veo), status="queued", stages_json=jdump(initial_stages()),
-        flags_json=jdump(flags),
+        veo_requested=bool(body.veo), status="queued", stages_json=jdump(stages),
+        flags_json=jdump(flags), script_json=script_json,
     )
     session.add(job)
     session.commit()
@@ -204,11 +225,19 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
     ip = _admit(request, actor, session)
     flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items() if k in ("not_on_menu", "continue_anyway")}
     flags["demo"] = actor != "owner"
+    stages, script_json = initial_stages(), None
+    old_flags = jload(old.flags_json, {}) or {}
+    if old_flags.get("director") and old.script_json:  # keep the plan the owner approved
+        flags["director"] = True
+        script_json = old.script_json
+        for st in stages:
+            if st["name"] == "script":
+                st["status"], st["note"] = "done", "Your Director mode plan"
     job = Job(
         restaurant_id=old.restaurant_id, mode=old.mode, menu_item_id=old.menu_item_id,
         photo_asset_id=old.photo_asset_id, insight_id=old.insight_id, angle=old.angle, style=old.style,
         length_s=old.length_s, veo_requested=old.veo_requested, status="queued",
-        stages_json=jdump(initial_stages()), flags_json=jdump(flags),
+        stages_json=jdump(stages), flags_json=jdump(flags), script_json=script_json,
     )
     session.add(job)
     session.commit()

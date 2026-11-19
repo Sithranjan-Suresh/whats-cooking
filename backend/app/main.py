@@ -14,7 +14,7 @@ from .config import ensure_dirs, get_settings
 from .db import WORKSPACE_RE, init_db, restore_media, workspace_var
 from .errors import install_error_handlers
 from .pipeline import job_queue
-from .routers import core, insights, jobs, videos
+from .routers import core, director, insights, jobs, videos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
     )
     install_error_handlers(app)
 
-    for r in (core.router, insights.router, jobs.router, videos.router):
+    for r in (core.router, director.router, insights.router, jobs.router, videos.router):
         app.include_router(r)
     ensure_dirs()
     app.mount("/media", StaticFiles(directory=str(s.media_dir)), name="media")

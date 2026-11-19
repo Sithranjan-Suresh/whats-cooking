@@ -98,12 +98,19 @@ export function PlayerStage({
       src={done ? job!.video!.url : example ? "/example-short.mp4" : null}
       poster={done ? job?.video?.poster_url : example ? "/example-short.jpg" : null}
       placeholder={job?.photo_url ?? previewImg}
+      dim={!(previewImg && !job)}
       overlay={
         busy ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-black/45 p-6 text-center">
             <ReelSpinner />
             <div className="font-display text-3xl uppercase tracking-[.12em] text-cream">{t.studio.working}…</div>
             <div className="font-mono text-[11px] text-cream/75">{job?.stages.find((s) => s.status === "running")?.note || ""}</div>
+          </div>
+        ) : previewImg && !job ? (
+          <div className="pointer-events-none flex justify-center pt-6">
+            <span className="rounded-full bg-black/70 px-3 py-1 font-mono text-[10px] uppercase tracking-[.2em] text-gold backdrop-blur">
+              Preview · approximate
+            </span>
           </div>
         ) : example ? (
           <div className="pointer-events-none flex justify-center pt-6">
