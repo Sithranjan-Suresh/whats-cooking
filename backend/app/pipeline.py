@@ -389,7 +389,7 @@ async def _visuals(ctx: Ctx) -> Path:
             else:
                 clip = ctx.work / "veo.mp4"
                 try:
-                    set_stage(jid, "visuals", "running", "Generating AI motion with Veo…")
+                    set_stage(jid, "visuals", "running", "Generating AI motion (about a minute)…")
                     await veo.generate_clip(ctx.photo_path, ctx.photo_mime,
                                             ctx.script.get("veo_prompt") or scripts.default_veo_prompt(), clip)
                 except veo.VeoError as e:
@@ -401,7 +401,7 @@ async def _visuals(ctx: Ctx) -> Path:
                     _update_job(jid, cost_cents=decision.est_cost_cents, veo_used=True)
                     try:
                         out = await render.veo_plus_tail(clip, ctx.photo_path, main_len, ctx.work, style=ctx.style)
-                        set_stage(jid, "visuals", "done", "AI motion (Veo) + photo tail")
+                        set_stage(jid, "visuals", "done", "AI motion")
                         return out
                     except FFmpegError as e:
                         fallback = "veo_error"
@@ -553,7 +553,7 @@ async def run_demo_cache(ctx: Ctx) -> None:
     script = meta.get("script")
     times = [("analyze", 1.0), ("script", 2.0), ("visuals", 3.0), ("voice", 1.0), ("assemble", 1.0)]
     await _timeline(ctx, times, script=script, notes={"analyze": "Dish confirmed", "script": "Grounded in your menu",
-                                                       "visuals": "AI motion (Veo) + photo tail",
+                                                       "visuals": "AI motion",
                                                        "voice": "Voice: neural",
                                                        "assemble": "15s"})
     out, poster = _copy_video(s.seed_dir / "hero_veo_short.mp4", ctx.job_id, "hero")
