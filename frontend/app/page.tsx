@@ -19,6 +19,9 @@ import { fanfare } from "@/lib/sfx";
 
 const LAST_JOB = "wc_last_job";
 
+// Build with NEXT_PUBLIC_SHIPPING=1 to show a "shipping an update" banner while the API redeploys.
+const SHIPPING = process.env.NEXT_PUBLIC_SHIPPING === "1";
+
 export default function Page() {
   return (
     <ThemeProvider>
@@ -85,6 +88,14 @@ function App() {
   const loading = !restaurant.data && !restaurant.error;
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10">
+      {SHIPPING && (
+        <div role="status" className="mb-6 rounded-xl border border-gold/60 bg-gold/10 px-4 py-3 text-center text-sm text-cream">
+          <b className="font-display text-lg uppercase tracking-[.06em] text-gold">🎬 Shipping an update</b>
+          <span className="block text-muted">
+            The studio is getting an upgrade and will be back in a few minutes. If something doesn&apos;t work, wait a bit and refresh.
+          </span>
+        </div>
+      )}
       <Header />
       {restaurant.error && (
         <div className="mt-6">
