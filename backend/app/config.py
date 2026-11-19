@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     # Storage
     # DATABASE_URL (Postgres, e.g. Neon) keeps branding, budget and history across restarts of hosts with
     # no persistent disk. Unset = SQLite at $DATA_DIR/app.db.
-    database_url: str = ""
+    database_url: str = ""           # app traffic; Neon's pooled (-pooler) address is fine
+    database_url_unpooled: str = ""  # direct address for creating tables (DDL); falls back to database_url
     data_dir: Path = BACKEND_ROOT / "data"
     seed_dir: Path = REPO_ROOT / "seed"
     fonts_dir: Path = BACKEND_ROOT / "assets" / "fonts"

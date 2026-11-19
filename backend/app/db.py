@@ -22,15 +22,21 @@ def _pg_url(url: str) -> str:
     return url
 
 
+def _pg_engine(url: str):
+    # Neon's pooler (PgBouncer, transaction mode) can't keep psycopg's automatic server-side prepared
+    # statements, so turn them off there. Neon also suspends idle compute: ping connections before use.
+    connect_args = {"prepare_threshold": None} if "-pooler." in url else {}
+    return create_engine(_pg_url(url), pool_pre_ping=True, pool_recycle=240, pool_size=5, max_overflow=5,
+                         connect_args=connect_args)
+
+
 def get_engine():
     global _engine
     if _engine is None:
         ensure_dirs()
         s = get_settings()
         if s.database_url:
-            # Serverless Postgres (Neon) suspends idle compute and drops connections: ping before use.
-            _engine = create_engine(_pg_url(s.database_url), pool_pre_ping=True, pool_recycle=240,
-                                    pool_size=5, max_overflow=5)
+            _engine = _pg_engine(s.database_url)
         else:
             _engine = create_engine(
                 f"sqlite:///{s.db_path}",
@@ -61,7 +67,17 @@ MIGRATIONS: list[tuple[str, str, str]] = []
 
 
 def init_db() -> None:
-    eng = get_engine()
+    s = get_settings()
+    # Schema changes go over the direct connection when there is one (Neon: DATABASE_URL_UNPOOLED).
+    ddl = _pg_engine(s.database_url_unpooled) if (s.database_url and s.database_url_unpooled) else get_engine()
+    try:
+        _create_schema(ddl)
+    finally:
+        if ddl is not get_engine():
+            ddl.dispose()
+
+
+def _create_schema(eng) -> None:
     SQLModel.metadata.create_all(eng)
     with eng.begin() as conn:
         for table, col, ddl in MIGRATIONS:

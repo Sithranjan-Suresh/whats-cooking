@@ -28,6 +28,7 @@ services:
       - { key: OAUTH_REDIRECT_URI, sync: false }   # https://<service>.onrender.com/youtube/auth/callback
       - { key: APP_SECRET, sync: false }           # make secrets
       - { key: ADMIN_TOKEN, sync: false }          # make secrets (second value); unlocks budget settings
-      - { key: DATABASE_URL, sync: false }         # Neon Postgres: keeps branding/budget/history across restarts
+      - { key: DATABASE_URL, sync: false }         # Neon pooled address: keeps branding/budget/history across restarts
+      - { key: DATABASE_URL_UNPOOLED, sync: false } # Neon direct address: creates tables at startup
       - { key: FRONTEND_ORIGIN, sync: false }      # https://<app>.vercel.app
       - { key: PUBLIC_BASE_URL, sync: false }      # https://<service>.onrender.com

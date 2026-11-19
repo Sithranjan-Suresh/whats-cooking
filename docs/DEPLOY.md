@@ -27,7 +27,8 @@ The live demo runs on **Vercel** (frontend, free) + **Render** (API, free plan),
 
 Render's free disk resets on every restart, so keep the data in Postgres:
 **neon.tech** → sign up → **Create project** (region near your API, e.g. AWS US West 2 for Render Oregon) →
-**Connect** → connection pooling **off** → copy the `postgresql://…?sslmode=require` string → `DATABASE_URL`.
+**Connect** → copy the pooled string (host has `-pooler`) → `DATABASE_URL`, and the direct one (pooling off) →
+`DATABASE_URL_UNPOOLED`. Or from the repo: `neon init` + `neon deploy` (see `neon.ts`) pull both into `.env.local`.
 Tables are created on first boot, the demo restaurant loads once, and uploaded photos/logos are restored from the
 database after each restart. Without `DATABASE_URL` the API uses SQLite on local disk (fine for local dev).
 
@@ -45,7 +46,7 @@ health check `/health`. Fill in the secret env vars (`make secrets` prints an `A
 | `PUBLIC_BASE_URL` | `https://<your-api>.onrender.com` |
 | `FRONTEND_ORIGIN` | your Vercel URL(s), comma-separated |
 | `APP_SECRET` | keep it stable: changing it disconnects everyone's YouTube |
-| `DATABASE_URL` | from step 3 |
+| `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | from step 3 |
 | `ADMIN_TOKEN` | any long random string (`make secrets` again); needed to change budget settings |
 
 First boot loads the demo restaurant automatically (about 30 seconds). Check `https://<your-api>.onrender.com/health`.

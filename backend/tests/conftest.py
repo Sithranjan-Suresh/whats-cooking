@@ -20,6 +20,9 @@ os.environ.update(
         "APP_SECRET": "ZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmQ=",
         "GOOGLE_OAUTH_CLIENT_ID": "",
         "ADMIN_TOKEN": "test-admin",
+        # never let a developer's DATABASE_URL (e.g. Neon in .env) point the tests at a real database
+        "DATABASE_URL": "",
+        "DATABASE_URL_UNPOOLED": "",
         "JOBS_PER_HOUR_PER_IP": "1000",
         "ACTIVE_JOBS_PER_IP": "1000",
         "MAX_QUEUED_JOBS": "1000",
