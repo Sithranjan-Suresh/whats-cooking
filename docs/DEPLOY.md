@@ -23,7 +23,15 @@ The live demo runs on **Vercel** (frontend, free) + **Render** (API, free plan),
    What's Cooking? (unsafe)** → **Continue**. Up to 100 people can connect before Google requires verification.
    (Alternative: stay in Testing and add each person under **Audience → Test users**.)
 
-## 3. API on Render
+## 3. Database (Neon, free)
+
+Render's free disk resets on every restart, so keep the data in Postgres:
+**neon.tech** → sign up → **Create project** (region near your API, e.g. AWS US West 2 for Render Oregon) →
+**Connect** → connection pooling **off** → copy the `postgresql://…?sslmode=require` string → `DATABASE_URL`.
+Tables are created on first boot, the demo restaurant loads once, and uploaded photos/logos are restored from the
+database after each restart. Without `DATABASE_URL` the API uses SQLite on local disk (fine for local dev).
+
+## 4. API on Render
 
 `render.yaml` describes the service. Either **New → Blueprint → this repo**, or create a **Web Service** from the repo
 with **Runtime: Docker**, **Dockerfile path** `./backend/Dockerfile`, **Docker context** `.`, plan **Free**,
@@ -37,6 +45,8 @@ health check `/health`. Fill in the secret env vars (`make secrets` prints an `A
 | `PUBLIC_BASE_URL` | `https://<your-api>.onrender.com` |
 | `FRONTEND_ORIGIN` | your Vercel URL(s), comma-separated |
 | `APP_SECRET` | keep it stable: changing it disconnects everyone's YouTube |
+| `DATABASE_URL` | from step 3 |
+| `ADMIN_TOKEN` | any long random string (`make secrets` again); needed to change budget settings |
 
 First boot loads the demo restaurant automatically (about 30 seconds). Check `https://<your-api>.onrender.com/health`.
 
@@ -44,7 +54,7 @@ First boot loads the demo restaurant automatically (about 30 seconds). Check `ht
 `/health` every 10 minutes during your working hours avoids the one-minute wake-up. Free instance hours are shared
 across all your free Render services (750 h/month), so don't run it 24/7 if you host other free services.
 
-## 4. Frontend on Vercel
+## 5. Frontend on Vercel
 
 Import the repo with **Root Directory** `frontend`, framework **Next.js**, env `NEXT_PUBLIC_API_URL=https://<your-api>.onrender.com`.
 Or from the CLI: `cd frontend && vercel deploy --prod`. If the project asks for a Vercel login on visit, turn off
@@ -52,6 +62,7 @@ Or from the CLI: `cd frontend && vercel deploy --prod`. If the project asks for 
 
 ## Budget
 
-Settings live in the API (`PATCH /settings`): `daily_veo_clip_limit` (default 10), `monthly_cap_cents`
-(default 1000 = $10), `veo_cost_per_sec_cents` (default 8, the estimate used for the cap). The page shows
+Settings live in the API (`PATCH /settings` with header `X-Admin-Token: $ADMIN_TOKEN`): `daily_veo_clip_limit`
+(default 10, max 20), `monthly_cap_cents` (default and hard maximum 1000 = $10), `free_mode`.
+`veo_cost_per_sec_cents` (default 8) is the estimate used for the cap. The page shows
 "AI videos left" and switches to free photo motion when the budget is used up.

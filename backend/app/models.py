@@ -4,6 +4,7 @@ import datetime as dt
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from sqlalchemy import Column, LargeBinary
 from sqlmodel import Field, SQLModel
 
 
@@ -34,6 +35,12 @@ class Asset(SQLModel, table=True):
     bytes: int = 0
     sha256: str = ""
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class AssetBlob(SQLModel, table=True):
+    """The bytes of an uploaded/seeded asset, so media can be restored after a host wipes its disk."""
+    asset_id: int = Field(primary_key=True, foreign_key="asset.id")
+    data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
 
 
 class MenuItem(SQLModel, table=True):

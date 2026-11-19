@@ -4,7 +4,7 @@ Restaurant dish photo or sales CSV → grounded script → AI motion (Gemini Omn
 Solo project. Live: https://whats-cooking-jade.vercel.app (Vercel) + Render free (API). Original plan: `docs/planning/` (historical).
 
 ## Layout
-- `backend/` FastAPI + SQLModel (SQLite at `$DATA_DIR/app.db`) + in-process asyncio job queue + ffmpeg.
+- `backend/` FastAPI + SQLModel (Postgres via `DATABASE_URL`, e.g. Neon; else SQLite at `$DATA_DIR/app.db`; uploaded asset bytes also kept in `assetblob` and restored on boot) + in-process asyncio job queue + ffmpeg.
   - `app/pipeline.py` stage machine (analyze → script → visuals → voice → assemble), mock + demo-cache runners
   - `app/services/` gemini (Gemini 3.5 Flash), scripts (grounding validator + template fallback), veo (AI motion: Gemini Omni via Interactions API; legacy veo-* ids), budget (AI-motion guard), tts, render, insights, youtube
   - `app/viewer.py` per-visitor YouTube connection (encrypted blob in the browser, sent as `X-YouTube-Auth`; never stored server-side)
@@ -21,11 +21,13 @@ Solo project. Live: https://whats-cooking-jade.vercel.app (Vercel) + Render free
 - Test audio/video changes against the Docker image too (Render's ffmpeg 7.1 is stricter than older versions).
 - Scripts may only state name/price/description from the menu row. Keep `scripts.validate_script` strict; fix prompts, not the validator or eval cases.
 - AI-motion calls only through `budget.reserve_veo` → `commit`/`release`. Run ONE uvicorn worker (lock + queue are in-process).
+- `budget.HARD_CAP_CENTS` ($10) caps spend whatever the settings say; `PATCH /settings` needs `ADMIN_TOKEN`. Job creation goes through `jobs._admit` (per-IP + queue limits).
+- ffmpeg runs one at a time (`media.ffmpeg` semaphore, `FFMPEG_THREADS`): Render free has 512 MB.
 - Don't commit `.env`, `backend/data/`, or real customer sales data.
 
 ## Commands
 ```
 make setup | make seed | make back | make front | make test | make eval | make models | make secrets
 ```
-Backend tests: `cd backend && .venv/bin/pytest -q` (real ffmpeg; Gemini/TTS/AI motion faked or absent).
+Backend tests: `cd backend && .venv/bin/pytest -q` (real ffmpeg; Gemini/TTS/AI motion faked or absent). Against Postgres: `TEST_DATABASE_URL=postgresql://… pytest -q`.
 Frontend: `cd frontend && npx tsc --noEmit && npm run build`.

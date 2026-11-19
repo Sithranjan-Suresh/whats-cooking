@@ -79,10 +79,13 @@ contract.md API reference        docs/planning/  the original plan (historical)
 ## Honest limits
 
 - **Free hosting.** The API runs on Render's free plan: about 2–3 minutes per video, and the server sleeps after
-  15 idle minutes (first visit then takes about a minute). A restart resets uploaded photos, the video list and the
-  logo to the demo defaults. Videos already posted stay on YouTube, and your YouTube connection survives.
-- **Shared studio.** Everyone who opens the link shares one restaurant (logo, name, video list). YouTube is the only
-  per-visitor part.
+  15 idle minutes (first visit then takes about a minute). Its disk resets on restart, so the data lives in a free
+  Neon Postgres database: logo, name, photos, budget and history survive. Rendered video *files* don't (posted ones
+  stay on YouTube), and your YouTube connection lives in your browser.
+- **Fair use.** With no login, each visitor can have one video in progress and make 6 an hour; budget settings need
+  an admin key, and AI-motion spend is capped at $10/month in code.
+- **Shared studio.** Everyone who opens the link shares one restaurant (logo, name). "Your videos" lists the ones made
+  in your browser, and YouTube is per visitor, but uploads aren't private: don't upload anything sensitive.
 - **YouTube privacy.** Google may keep uploads from this unverified app private until it's reviewed. The app shows the
   status YouTube actually returns.
 - **Cost estimate.** AI-motion pricing is an estimate ($0.64 per 8s); check real billing after a few videos.

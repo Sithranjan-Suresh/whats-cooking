@@ -4,10 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import Path
 from urllib.parse import quote
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -29,7 +30,8 @@ router = APIRouter()
 def list_videos(session: Session = Depends(get_session)):
     r = current_restaurant(session)
     rows = session.exec(select(Video).where(Video.restaurant_id == r.id).order_by(Video.created_at.desc())).all()
-    return [video_out(session, v) for v in rows]
+    # Video files live on the host's disk; after a free-host restart they're gone (posted ones stay on YouTube).
+    return [video_out(session, v) for v in rows if Path(v.path).exists()]
 
 
 @router.get("/videos/{video_id}")
@@ -118,11 +120,12 @@ async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_a
 # ------------------------------------------------------------------ YouTube OAuth (per visitor)
 
 @router.get("/youtube/auth/url")
-def yt_auth_url(session: Session = Depends(get_session)):
+def yt_auth_url(nonce: str = Query(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+                session: Session = Depends(get_session)):
     """Google consent URL; the frontend navigates to it. Anyone can connect their own channel."""
     r = current_restaurant(session)
     try:
-        return {"url": youtube.auth_url(r.id)}
+        return {"url": youtube.auth_url(r.id, nonce)}
     except youtube.YouTubeError as e:
         raise AppError(e.code, e.message, 400) from e
 
@@ -141,7 +144,9 @@ def yt_callback(code: str | None = None, state: str | None = None, error: str | 
         return RedirectResponse(f"{front}/?youtube=error&reason=exchange_failed", status_code=302)
     # Handed to this visitor's browser only (URL fragment never reaches server logs); not stored server-side.
     blob = encode_connection(info["refresh_token"], info["channel_id"], info["channel_title"])
-    return RedirectResponse(f"{front}/?youtube=connected#yt={quote(blob)}", status_code=302)
+    # n= echoes the browser's nonce: the page keeps the connection only if it matches the one it started with.
+    return RedirectResponse(f"{front}/?youtube=connected#yt={quote(blob)}&n={quote(info.get('nonce') or '')}",
+                            status_code=302)
 
 
 @router.get("/youtube/uploads")

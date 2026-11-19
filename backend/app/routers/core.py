@@ -2,19 +2,20 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import re
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..auth import Actor, get_actor, require_owner
 from ..config import get_settings, media_url
-from ..db import current_restaurant, get_app_settings, get_session
+from ..db import current_restaurant, get_app_settings, get_session, keep_asset_bytes
 from ..errors import AppError
 from ..models import Asset, MenuItem
 from ..serializers import menu_item_out, restaurant_out
@@ -125,6 +126,7 @@ def save_image_asset(session: Session, restaurant_id: int, data: bytes, mime: st
     session.add(a)
     session.commit()
     session.refresh(a)
+    keep_asset_bytes(session, a)
     return a
 
 
@@ -231,8 +233,8 @@ def usage(actor: Actor = Depends(get_actor), session: Session = Depends(get_sess
 
 
 class SettingsPatch(BaseModel):
-    daily_veo_clip_limit: Optional[int] = Field(default=None, ge=0, le=50)
-    monthly_cap_cents: Optional[int] = Field(default=None, ge=0, le=10000)
+    daily_veo_clip_limit: Optional[int] = Field(default=None, ge=0, le=20)
+    monthly_cap_cents: Optional[int] = Field(default=None, ge=0, le=budget.HARD_CAP_CENTS)
     free_mode: Optional[bool] = None
 
 
@@ -242,9 +244,17 @@ def get_settings_route(session: Session = Depends(get_session)):
     return get_app_settings(session, r.id).model_dump()
 
 
+def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
+    """Budget settings move real money, so they need ADMIN_TOKEN (never sent by the web app)."""
+    real = get_settings().admin_token
+    if not real:
+        raise AppError("settings_locked", "Budget settings are locked on this server (no ADMIN_TOKEN set).", 403)
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, real):
+        raise AppError("admin_required", "Changing budget settings needs the admin key.", 403)
+
+
 @router.patch("/settings")
-def patch_settings(body: SettingsPatch, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
-    require_owner(actor)
+def patch_settings(body: SettingsPatch, _: None = Depends(require_admin), session: Session = Depends(get_session)):
     r = current_restaurant(session)
     st = get_app_settings(session, r.id)
     for k, v in body.model_dump(exclude_unset=True).items():

@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { addMyJob, api, fetcher, getMyJobs, setYtBlob, ApiError } from "@/lib/api";
+import { acceptYouTubeConnection, addMyJob, api, fetcher, getMyJobs, setYtBlob, startYouTubeConnect, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
 import type { InsightCard, InsightsResponse, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
@@ -49,12 +49,16 @@ function App() {
       /* ignore */
     }
     const hash = window.location.hash;
-    if (hash.startsWith("#yt=")) {
-      setYtBlob(decodeURIComponent(hash.slice(4)));
-      restaurant.mutate();
-    }
+    const accepted = hash.startsWith("#yt=") && acceptYouTubeConnection(hash);
+    if (accepted) restaurant.mutate();
     const yt = params.get("youtube");
-    if (yt === "connected") toast("YouTube connected. Hit Post to YouTube.", "ok");
+    if (yt === "connected")
+      toast(
+        accepted
+          ? "YouTube connected. Hit Post to YouTube."
+          : "That YouTube link didn't start in this browser, so it was ignored. Click Connect YouTube to connect your own channel.",
+        accepted ? "ok" : "bad",
+      );
     if (yt === "error") {
       const reason = params.get("reason") ?? "unknown";
       toast(
@@ -370,7 +374,7 @@ function StepDish({ onStarted, busy }: { onStarted: (id: number) => void; busy: 
 
       {error && (
         <div className="mt-4 space-y-2">
-          <ErrorCallout error={error} title={capHit ? "$10 budget cap reached" : undefined} />
+          <ErrorCallout error={error} title={capHit ? "AI video limit reached" : undefined} />
           {capHit && (
             <Button variant="ghost" onClick={() => start(false)} loading={creating}>
               Make it free instead (photo motion)
@@ -637,8 +641,7 @@ function PostButton({ v, r, ytConfigured, onChanged, full }: { v: Video; r: Rest
         onClick={async () => {
           setConnecting(true);
           try {
-            const { url } = await api<{ url: string }>("/youtube/auth/url");
-            window.location.href = url;
+            await startYouTubeConnect();
           } catch (e) {
             toast((e as Error).message, "bad");
             setConnecting(false);
@@ -874,8 +877,7 @@ function YouTubeStatus({ r, ytConfigured }: { r: Restaurant; ytConfigured: boole
   const connect = async () => {
     setBusy(true);
     try {
-      const { url } = await api<{ url: string }>("/youtube/auth/url");
-      window.location.href = url;
+      await startYouTubeConnect();
     } catch (e) {
       toast((e as Error).message, "bad");
       setBusy(false);

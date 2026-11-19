@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import ensure_dirs, get_settings
-from .db import init_db
+from .db import init_db, restore_media
 from .errors import install_error_handlers
 from .pipeline import job_queue
 from .routers import core, insights, jobs, videos
@@ -21,6 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 async def lifespan(_: FastAPI):
     ensure_dirs()
     init_db()
+    restore_media()
     await job_queue.start(get_settings().workers)
     yield
     await job_queue.stop()

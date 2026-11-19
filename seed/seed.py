@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from sqlmodel import Session, select  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
-from app.db import get_app_settings, get_engine, init_db  # noqa: E402
+from app.db import get_app_settings, get_engine, has_restaurant, init_db, keep_asset_bytes  # noqa: E402
 from app.models import Asset, Job, MenuItem, Restaurant, Video, jdump  # noqa: E402
 from app.pipeline import initial_stages  # noqa: E402
 from app.routers.core import import_menu_csv  # noqa: E402
@@ -55,6 +55,7 @@ def copy_asset(session: Session, rid: int, src: Path, kind: str, mime: str) -> A
     session.add(a)
     session.commit()
     session.refresh(a)
+    keep_asset_bytes(session, a)
     return a
 
 
@@ -88,6 +89,10 @@ async def render_free(session: Session, r: Restaurant, item: MenuItem, out: Path
 async def main() -> None:
     s = get_settings()
     init_db()
+    if "--if-empty" in sys.argv and has_restaurant():
+        # A persistent DB (DATABASE_URL) already holds the owner's restaurant: never overwrite their branding.
+        print("seed: restaurant already exists, skipping")
+        return
     with Session(get_engine()) as session:
         r = session.exec(select(Restaurant).where(Restaurant.slug == "kumars")).first()
         if r is None:

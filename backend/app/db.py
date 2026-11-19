@@ -1,15 +1,25 @@
-"""SQLite engine + session helpers."""
+"""Database engine + session helpers. Postgres when DATABASE_URL is set, otherwise SQLite."""
+import logging
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from .config import ensure_dirs, get_settings
 from .errors import AppError
 from . import models  # noqa: F401  (register tables)
 
+log = logging.getLogger(__name__)
 _engine = None
+
+
+def _pg_url(url: str) -> str:
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
 
 
 def get_engine():
@@ -17,18 +27,23 @@ def get_engine():
     if _engine is None:
         ensure_dirs()
         s = get_settings()
-        _engine = create_engine(
-            f"sqlite:///{s.db_path}",
-            connect_args={"check_same_thread": False, "timeout": 30},
-        )
+        if s.database_url:
+            # Serverless Postgres (Neon) suspends idle compute and drops connections: ping before use.
+            _engine = create_engine(_pg_url(s.database_url), pool_pre_ping=True, pool_recycle=240,
+                                    pool_size=5, max_overflow=5)
+        else:
+            _engine = create_engine(
+                f"sqlite:///{s.db_path}",
+                connect_args={"check_same_thread": False, "timeout": 30},
+            )
 
-        @event.listens_for(_engine, "connect")
-        def _pragmas(dbapi_conn, _):
-            cur = dbapi_conn.cursor()
-            cur.execute("PRAGMA journal_mode=WAL")
-            cur.execute("PRAGMA busy_timeout=30000")
-            cur.execute("PRAGMA foreign_keys=ON")
-            cur.close()
+            @event.listens_for(_engine, "connect")
+            def _pragmas(dbapi_conn, _):
+                cur = dbapi_conn.cursor()
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA busy_timeout=30000")
+                cur.execute("PRAGMA foreign_keys=ON")
+                cur.close()
 
     return _engine
 
@@ -50,7 +65,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(eng)
     with eng.begin() as conn:
         for table, col, ddl in MIGRATIONS:
-            cols = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
+            cols = {c["name"] for c in inspect(conn).get_columns(table)}
             if col not in cols:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
         for stmt in (
@@ -92,3 +107,43 @@ def get_app_settings(session: Session, restaurant_id: int) -> models.AppSettings
         session.commit()
         session.refresh(st)
     return st
+
+
+# ------------------------------------------------------------------ media that survives disk wipes
+
+def keep_asset_bytes(session: Session, asset: models.Asset) -> None:
+    """Store an asset's file in the DB (call after the Asset row exists). Restored by restore_media()."""
+    data = Path(asset.path).read_bytes()
+    session.merge(models.AssetBlob(asset_id=asset.id, data=data))
+    session.commit()
+
+
+def restore_media() -> int:
+    """Write back asset files that are in the DB but missing on disk (e.g. after a free-host restart).
+
+    One blob at a time, so a large library never has to fit in memory.
+    """
+    restored = 0
+    with Session(get_engine()) as session:
+        rows = session.exec(
+            select(models.Asset.id, models.Asset.path).join(models.AssetBlob, models.AssetBlob.asset_id == models.Asset.id)
+        ).all()
+        for asset_id, path in rows:
+            p = Path(path)
+            if p.exists():
+                continue
+            blob = session.get(models.AssetBlob, asset_id)
+            if blob is None:
+                continue
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(blob.data)
+            session.expunge(blob)
+            restored += 1
+    if restored:
+        log.info("restored %d media files from the database", restored)
+    return restored
+
+
+def has_restaurant() -> bool:
+    with Session(get_engine()) as session:
+        return session.exec(select(models.Restaurant.id)).first() is not None

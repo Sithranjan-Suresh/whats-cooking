@@ -86,4 +86,4 @@ def test_usage_snapshot(restaurant):
     with Session(get_engine()) as s:
         snap = budget.usage_snapshot(s, restaurant, today=TODAY)
     assert snap["today"] == {"clips": 1, "limit": 10}
-    assert snap["month"] == {"est_cents": 64, "cap_cents": 1500}
+    assert snap["month"] == {"est_cents": 64, "cap_cents": 1000}  # settings above the $10 hard cap are clamped

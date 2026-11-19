@@ -14,7 +14,8 @@ Serializers: `backend/app/serializers.py`. Change this file deliberately and pre
   ```
   Common codes: `validation_error` (422), `not_found` (404), `demo_mode` (403), `bad_owner_token` (401),
   `file_too_large` (413), `bad_mime` / `bad_image` (415), `bad_csv` (400), `photo_required` (400),
-  `youtube_not_connected` (409), `budget_cap_reached` (402), `rate_limited` (429, retryable), `internal_error` (500, retryable).
+  `youtube_not_connected` (409), `budget_cap_reached` (402), `rate_limited` (429, retryable), `admin_required` / `settings_locked` (403),
+  `internal_error` (500, retryable).
 
 ## Auth
 
@@ -28,8 +29,16 @@ Serializers: `backend/app/serializers.py`. Change this file deliberately and pre
 
 The frontend stores the owner token in `localStorage` after a one-time unlock.
 
+**Budget settings** (`PATCH /settings`) need `X-Admin-Token` equal to `ADMIN_TOKEN` (403 `admin_required`; 403
+`settings_locked` if the server has none). The web app never sends it. Spend is also capped in code at $10/month.
+
+**Fair use** (no login on the public app): job creation (`POST /jobs`, `/retry`, `/edit`) allows one video in progress
+and `JOBS_PER_HOUR_PER_IP` (6) per visitor IP, and refuses when `MAX_QUEUED_JOBS` (4) are already queued/running →
+429 `rate_limited` with a human message. A valid `X-Owner-Token` skips these.
+
 **YouTube is per visitor:** the OAuth callback hands the visitor's browser an encrypted connection (URL fragment
-`#yt=…`, Fernet with `APP_SECRET`). The browser keeps it in `localStorage` and sends it as `X-YouTube-Auth`; the server
+`#yt=…&n=<nonce>`, Fernet with `APP_SECRET`). The browser starts the flow with a random `nonce` and keeps the
+connection only if the returned `n` matches, so nobody can plant their own channel in someone else's browser. The browser keeps it in `localStorage` and sends it as `X-YouTube-Auth`; the server
 stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_title` for *that* visitor, and
 `POST /videos/{id}/publish` uploads to *their* channel.
 
@@ -50,21 +59,21 @@ stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_ti
 | GET `/insights` | any | — | `{batch_id, cards: InsightCard[]}` (computed on first call if sales exist) |
 | POST `/insights/refresh` | owner | — | same as GET |
 | GET `/insights/{id}` | any | — | `InsightCard` |
-| POST `/jobs` | any | `{mode:"photo"\|"insight"\|"menu", photo_asset_id?, menu_item_id?, insight_id?, style:"bold"\|"warm"\|"minimal", length_s:8\|15\|30 (default 8), veo:bool}` | **202** `{job_id}`. **402 `budget_cap_reached`** if `veo:true` would exceed the daily limit or monthly cap (message says how much is left) |
+| POST `/jobs` | any (fair-use limits) | `{mode:"photo"\|"insight"\|"menu", photo_asset_id?, menu_item_id?, insight_id?, style:"bold"\|"warm"\|"minimal", length_s:8\|15\|30 (default 8), veo:bool}` | **202** `{job_id}`. **402 `budget_cap_reached`** if `veo:true` would exceed the daily limit or monthly cap (message says how much is left) |
 | GET `/jobs` | any | `?status=active` → queued/running/needs_dish only | `Job[]` (newest first, max 30) |
 | GET `/jobs/{id}` | any | — | `Job` |
 | POST `/jobs/{id}/confirm-dish` | any | `{menu_item_id: int \| null, continue_anyway?: bool}` | `{ok:true}`. Resumes a `needs_dish` job. `null` = "Not on menu" (script omits price) |
 | POST `/jobs/{id}/retry` | any | — | **202** `{job_id}` (new job, same inputs) |
-| GET `/videos` | any | — | `Video[]` newest first |
+| GET `/videos` | any | — | `Video[]` newest first (videos whose file was lost in a host restart are left out) |
 | GET `/videos/{id}` | any | — | `Video` |
 | POST `/videos/{id}/publish` | owner | `{title, description, tags:[str], privacy:"private"\|"unlisted"\|"public"}` | **202** `{publish_status:"publishing"}`. Poll `/videos/{id}` (`publish_progress` 0–100) |
-| GET `/youtube/auth/url` | any | — | `{url}` Google consent URL (frontend navigates to it). Any visitor can connect their own channel |
-| GET `/youtube/auth/callback` | Google | `code, state` | 302 → `{FRONTEND_ORIGIN}/?youtube=connected#yt=<encrypted connection>` (or `/?youtube=error&reason=…`) |
+| GET `/youtube/auth/url` | any | `?nonce=` (16–64 chars `[A-Za-z0-9_-]`, made and kept by the browser) | `{url}` Google consent URL (frontend navigates to it). Any visitor can connect their own channel |
+| GET `/youtube/auth/callback` | Google | `code, state` | 302 → `{FRONTEND_ORIGIN}/?youtube=connected#yt=<encrypted connection>&n=<nonce>` (or `/?youtube=error&reason=…`) |
 | POST `/youtube/disconnect` | any | — | `{ok:true}`. Nothing is stored server-side; the browser forgets its connection |
 | GET `/youtube/uploads` | visitor | `X-YouTube-Auth` | `{channel_title, videos:[{id, title, url, published_at, thumbnail, privacy}]}`: the visitor's videos made with the app (description tag `#WhatsCookingApp`), read live from their channel. 409 `youtube_not_connected` |
 | GET `/usage` | any | — | `Usage` |
 | GET `/settings` | any | — | `Settings` |
-| PATCH `/settings` | owner | `{daily_veo_clip_limit? 0–50, monthly_cap_cents? 0–10000, free_mode?}` | `Settings` |
+| PATCH `/settings` | admin (`X-Admin-Token`) | `{daily_veo_clip_limit? 0–20, monthly_cap_cents? 0–1000, free_mode?}` | `Settings` |
 
 `POST /jobs` rules: `photo` needs `photo_asset_id` (optional `menu_item_id` skips matching); `insight` needs
 `insight_id` (dish, photo and angle come from the insight; pass `photo_asset_id` if the dish has no photo);

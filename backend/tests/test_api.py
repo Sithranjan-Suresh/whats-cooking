@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 OWNER = {"X-Owner-Token": "test-owner"}
+ADMIN = {"X-Admin-Token": "test-admin"}
 
 
 @pytest.fixture()
@@ -66,7 +67,11 @@ def test_upload_rejections(client):
 def test_demo_mode_blocks_owner_actions(client):
     assert client.patch("/settings", json={"free_mode": True}).status_code == 403
     assert client.patch("/restaurants/me", json={"name": "X"}).json()["error"]["code"] == "demo_mode"
-    assert client.patch("/settings", json={"free_mode": True}, headers=OWNER).json()["free_mode"] is True
+    # budget settings need the admin key, even for the owner
+    r = client.patch("/settings", json={"free_mode": True}, headers=OWNER)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "admin_required"
+    assert client.patch("/settings", json={"free_mode": True}, headers={"X-Admin-Token": "wrong"}).status_code == 403
+    assert client.patch("/settings", json={"free_mode": True}, headers=ADMIN).json()["free_mode"] is True
 
 
 def test_menu_and_brand(client):
@@ -141,7 +146,9 @@ def test_usage_and_settings_validation(client):
     u = client.get("/usage", headers=OWNER).json()
     assert u["veo"]["allowed"] is True
     assert u["ai_videos_left"] == 10 and u["ai_videos_total"] == 15  # 10/day limit, $10 cap / 64¢
-    assert client.patch("/settings", json={"daily_veo_clip_limit": 99}, headers=OWNER).status_code == 422
+    assert client.patch("/settings", json={"daily_veo_clip_limit": 99}, headers=ADMIN).status_code == 422
+    # the $10 hard cap can't be raised through the API
+    assert client.patch("/settings", json={"monthly_cap_cents": 10000}, headers=ADMIN).status_code == 422
 
 
 def _menu_job(client, name="Chicken Biryani", veo=False, headers=None):
@@ -177,14 +184,14 @@ def test_budget_cap_blocks_with_clear_error(client, monkeypatch):
         called.append(1)
 
     monkeypatch.setattr(veo, "generate_clip", never)
-    client.patch("/settings", json={"monthly_cap_cents": 50}, headers=OWNER)  # less than one 64¢ clip
+    client.patch("/settings", json={"monthly_cap_cents": 50}, headers=ADMIN)  # less than one 64¢ clip
     menu = client.get("/menu").json()
     item = next(m for m in menu if m["name"] == "Chicken Biryani")
     up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
     r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"], "veo": True}, headers=OWNER)
     assert r.status_code == 402
     body = r.json()["error"]
-    assert body["code"] == "budget_cap_reached" and "$0.50" in body["message"] and "Turn off Real motion" in body["message"]
+    assert body["code"] == "budget_cap_reached" and "$0.50" in body["message"] and "free photo motion" in body["message"]
     assert not called
     # free mode still works under the cap
     r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"], "veo": False}, headers=OWNER)
@@ -281,10 +288,13 @@ def test_youtube_is_per_visitor(client, monkeypatch):
     from app.services import youtube
 
     monkeypatch.setattr(youtube, "exchange_code", lambda code, state: {
-        "restaurant_id": 1, "refresh_token": "rt-raj", "channel_id": "UC1", "channel_title": "Raj Eats"})
+        "restaurant_id": 1, "nonce": "browser-nonce-123456", "refresh_token": "rt-raj", "channel_id": "UC1",
+        "channel_title": "Raj Eats"})
     r = client.get("/youtube/auth/callback?code=x&state=y", follow_redirects=False)
     assert r.status_code == 302 and "youtube=connected#yt=" in r.headers["location"]
-    raj = unquote(r.headers["location"].split("#yt=", 1)[1])
+    frag = r.headers["location"].split("#yt=", 1)[1]
+    raj, nonce = (unquote(x) for x in frag.split("&n=", 1))
+    assert nonce == "browser-nonce-123456"  # echoed so the browser can check it started this connection
     assert "rt-raj" not in raj  # encrypted
 
     # Raj sees his channel; another visitor (no header) sees nothing connected; garbage is ignored.
@@ -307,3 +317,112 @@ def test_youtube_is_per_visitor(client, monkeypatch):
         r = client.post(f"/videos/{vids[0]['id']}/publish", json={"title": "t"}, headers=OWNER)
         assert r.json()["error"]["code"] == "youtube_not_connected"
 
+
+
+# ------------------------------------------------------------------ hardening (public app, no login)
+
+def _limits(monkeypatch, **kw):
+    from app.config import get_settings
+    from app.routers import jobs
+
+    for k, v in kw.items():
+        monkeypatch.setattr(get_settings(), k, v)
+    jobs._hourly.clear()
+    jobs._ip_jobs.clear()
+
+
+def _hold_queue(monkeypatch):
+    """Keep new jobs queued (no worker picks them up) so 'in progress' limits can be observed."""
+    from app.pipeline import job_queue
+
+    monkeypatch.setattr(job_queue, "enqueue", lambda job_id: None)
+
+
+def test_one_video_in_progress_per_visitor(client, monkeypatch):
+    _limits(monkeypatch, active_jobs_per_ip=1, jobs_per_hour_per_ip=100, max_queued_jobs=100)
+    _hold_queue(monkeypatch)
+    _menu_job(client)
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    item = next(m for m in client.get("/menu").json() if m["name"] == "Chicken Biryani")
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"]})
+    assert r.status_code == 429 and "in progress" in r.json()["error"]["message"]
+    # a real owner token is exempt
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"]}, headers=OWNER)
+    assert r.status_code == 202
+
+
+def test_hourly_limit_and_busy_studio(client, monkeypatch):
+    _limits(monkeypatch, active_jobs_per_ip=100, jobs_per_hour_per_ip=2, max_queued_jobs=100)
+    _hold_queue(monkeypatch)
+    _menu_job(client)
+    _menu_job(client)
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    item = next(m for m in client.get("/menu").json() if m["name"] == "Chicken Biryani")
+    body = {"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"]}
+    r = client.post("/jobs", json=body)
+    assert r.status_code == 429 and "in the last hour" in r.json()["error"]["message"]
+    # another visitor isn't affected by the first one's hourly count, but the whole queue has a ceiling
+    _limits(monkeypatch, jobs_per_hour_per_ip=100, max_queued_jobs=2)
+    r = client.post("/jobs", json=body, headers={"CF-Connecting-IP": "203.0.113.9"})
+    assert r.status_code == 429 and "studio is busy" in r.json()["error"]["message"]
+
+
+def test_settings_locked_without_admin_token(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "admin_token", "")
+    r = client.patch("/settings", json={"monthly_cap_cents": 100}, headers={"X-Admin-Token": ""})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "settings_locked"
+
+
+def test_youtube_connect_carries_browser_nonce(client, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.config import get_settings
+    from app.services import youtube
+
+    assert client.get("/youtube/auth/url").status_code == 422  # a nonce is required
+    s = get_settings()
+    monkeypatch.setattr(s, "google_oauth_client_id", "cid")
+    monkeypatch.setattr(s, "google_oauth_client_secret", "secret")
+    url = client.get("/youtube/auth/url?nonce=abcdef0123456789abcd").json()["url"]
+    state = parse_qs(urlparse(url).query)["state"][0]
+    assert youtube._verify(state)["n"] == "abcdef0123456789abcd"
+    # tampering with the nonce breaks the signature
+    raw, sig = state.rsplit(".", 1)
+    import base64
+    import json as _json
+
+    forged = base64.urlsafe_b64encode(_json.dumps({**youtube._verify(state), "n": "attacker"}).encode()).decode()
+    with pytest.raises(youtube.YouTubeError):
+        youtube._verify(f"{forged}.{sig}")
+
+
+def test_media_restored_from_db_after_disk_wipe(client):
+    from pathlib import Path
+
+    from app.db import restore_media
+
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    rel = up["url"].split("/media/", 1)[1]
+    from app.config import get_settings
+
+    path = Path(get_settings().media_dir) / rel
+    original = path.read_bytes()
+    path.unlink()
+    assert restore_media() >= 1
+    assert path.read_bytes() == original
+
+
+def test_videos_with_lost_files_are_hidden(client):
+    from pathlib import Path
+
+    jid = _menu_job(client)
+    j = _wait(client, jid, until=("done", "failed"), timeout=90)
+    assert j["status"] == "done"
+    vids = client.get("/videos").json()
+    assert any(v["job_id"] == jid for v in vids)
+    from app.config import get_settings
+
+    Path(get_settings().media_dir, j["video"]["url"].split("/media/", 1)[1]).unlink()
+    assert not any(v["job_id"] == jid for v in client.get("/videos").json())

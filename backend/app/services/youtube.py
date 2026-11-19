@@ -74,10 +74,12 @@ def _flow(state: Optional[str] = None):
     return flow
 
 
-def auth_url(restaurant_id: int) -> str:
+def auth_url(restaurant_id: int, nonce: str) -> str:
+    """nonce: random value the visitor's browser made and kept. It rides in the signed state and comes back with
+    the connection, so the browser only accepts a connection it started (stops someone planting their channel)."""
     if not get_settings().youtube_enabled:
         raise YouTubeError("youtube_not_configured", "YouTube OAuth client is not configured on the server.")
-    state = _sign({"r": restaurant_id, "t": int(time.time())})
+    state = _sign({"r": restaurant_id, "t": int(time.time()), "n": nonce})
     url, _ = _flow(state).authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
     return url
 
@@ -101,6 +103,7 @@ def exchange_code(code: str, state: str) -> dict:
         log.warning("channels.list failed: %s", e)
     return {
         "restaurant_id": payload["r"],
+        "nonce": payload.get("n") or "",
         "refresh_token": creds.refresh_token,
         "channel_id": channel_id,
         "channel_title": channel_title,

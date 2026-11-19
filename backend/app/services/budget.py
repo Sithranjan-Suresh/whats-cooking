@@ -20,6 +20,13 @@ _lock = threading.Lock()
 
 ACTIVE = ("reserved", "committed")
 
+# Hard ceiling on estimated AI-motion spend per month, whatever the settings say. Raising it needs a code change.
+HARD_CAP_CENTS = 1000
+
+
+def _cap(st: AppSettings) -> int:
+    return min(st.monthly_cap_cents, HARD_CAP_CENTS)
+
 
 @dataclass
 class Decision:
@@ -43,7 +50,7 @@ def usage_snapshot(session: Session, restaurant_id: int, today: Optional[date] =
     month_cents = sum(r.est_cost_cents for r in rows if (r.date.year, r.date.month) == (today.year, today.month))
     return {
         "today": {"clips": clips_today, "limit": st.daily_veo_clip_limit},
-        "month": {"est_cents": month_cents, "cap_cents": st.monthly_cap_cents},
+        "month": {"est_cents": month_cents, "cap_cents": _cap(st)},
         "cost_per_sec_cents": st.veo_cost_per_sec_cents,
         "free_mode": st.free_mode,
     }
@@ -58,7 +65,7 @@ def check(session: Session, restaurant_id: int, seconds: int = 8, today: Optiona
         return Decision(False, "free_mode", est)
     if snap["today"]["clips"] >= st.daily_veo_clip_limit:
         return Decision(False, "daily_limit", est)
-    if snap["month"]["est_cents"] + est > st.monthly_cap_cents:
+    if snap["month"]["est_cents"] + est > _cap(st):
         return Decision(False, "monthly_cap", est)
     return Decision(True, None, est)
 
@@ -80,7 +87,7 @@ def reserve_veo(restaurant_id: int, job_id: int, seconds: int = 8, today: Option
             if clips_today >= st.daily_veo_clip_limit:
                 return Decision(False, "daily_limit", est)
             month = sum(r.est_cost_cents for r in rows if (r.date.year, r.date.month) == (today.year, today.month))
-            if month + est > st.monthly_cap_cents:
+            if month + est > _cap(st):
                 return Decision(False, "monthly_cap", est)
             row = UsageLedger(
                 restaurant_id=restaurant_id, date=today, job_id=job_id, seconds=seconds,
@@ -112,20 +119,19 @@ def release(job_id: int) -> int:
 
 
 DENY_MESSAGES = {
-    "free_mode": "Free mode is on",
-    "daily_limit": "Daily Veo limit reached",
-    "monthly_cap": "Monthly cap reached",
-    "demo_mode": "Demo mode: Veo is reserved for the presenter",
+    "free_mode": "AI motion is switched off on this server",
+    "daily_limit": "Today's AI videos are used up",
+    "monthly_cap": "The AI video budget is used up",
+    "demo_mode": "AI motion is off in demo mode",
 }
 
 
 def cap_message(session: Session, restaurant_id: int, reason: str, est_cents: int) -> str:
     st = get_app_settings(session, restaurant_id)
-    snap = usage_snapshot(session, restaurant_id)
     if reason == "daily_limit":
-        return (f"Today's limit of {st.daily_veo_clip_limit} realistic videos is used up. "
-                "Turn off Real motion to make this one free, or raise the daily limit in the Production Office.")
-    left = max(0, st.monthly_cap_cents - snap["month"]["est_cents"])
-    return (f"Budget cap reached: this realistic video costs about ${est_cents / 100:.2f}, but only ${left / 100:.2f} "
-            f"is left of your ${st.monthly_cap_cents / 100:.2f} cap. Turn off Real motion to make it free, "
-            "or raise the cap in the Production Office.")
+        return (f"Today's {st.daily_veo_clip_limit} AI videos are used up (they reset tomorrow). "
+                "You can still make this one with free photo motion.")
+    cap = _cap(st)
+    money = f"${cap // 100}" if cap % 100 == 0 else f"${cap / 100:.2f}"
+    return (f"The {money} AI video budget for this month is used up. "
+            "You can still make videos with free photo motion.")

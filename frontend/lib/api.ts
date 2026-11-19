@@ -132,3 +132,38 @@ export function addMyJob(id: number) {
     /* ignore */
   }
 }
+
+// YouTube connect: the browser makes a one-time nonce, the server signs it into the OAuth state and hands it
+// back with the connection (#yt=…&n=…). A connection is kept only if its nonce matches, so a link someone
+// else started (with their channel) can't be planted in this browser.
+const YT_NONCE_KEY = "wc_yt_nonce";
+
+export async function startYouTubeConnect(): Promise<void> {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  try {
+    window.localStorage.setItem(YT_NONCE_KEY, nonce);
+  } catch {
+    /* ignore */
+  }
+  const { url } = await api<{ url: string }>(`/youtube/auth/url?nonce=${nonce}`);
+  window.location.href = url;
+}
+
+/** Accept a connection from the URL fragment only if this browser started it. */
+export function acceptYouTubeConnection(hash: string): boolean {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const blob = params.get("yt");
+  const nonce = params.get("n");
+  let expected: string | null = null;
+  try {
+    expected = window.localStorage.getItem(YT_NONCE_KEY);
+    window.localStorage.removeItem(YT_NONCE_KEY);
+  } catch {
+    /* ignore */
+  }
+  if (!blob || !nonce || !expected || nonce !== expected) return false;
+  setYtBlob(blob);
+  return true;
+}

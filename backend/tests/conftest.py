@@ -19,6 +19,11 @@ os.environ.update(
         "DEMO_CACHE": "0",
         "APP_SECRET": "ZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmRkZmQ=",
         "GOOGLE_OAUTH_CLIENT_ID": "",
+        "ADMIN_TOKEN": "test-admin",
+        "JOBS_PER_HOUR_PER_IP": "1000",
+        "ACTIVE_JOBS_PER_IP": "1000",
+        "MAX_QUEUED_JOBS": "1000",
+        "DEMO_JOBS_PER_HOUR_PER_IP": "1000",
     }
 )
 
@@ -29,12 +34,20 @@ get_settings.cache_clear()
 
 @pytest.fixture()
 def fresh_db(tmp_path, monkeypatch):
-    """A brand-new SQLite DB + media dir per test."""
+    """A brand-new DB + media dir per test (SQLite, or Postgres when TEST_DATABASE_URL is set)."""
     from app import db
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    pg = os.environ.get("TEST_DATABASE_URL")  # e.g. postgresql://postgres@127.0.0.1:5433/wctest
+    if pg:
+        monkeypatch.setenv("DATABASE_URL", pg)
     get_settings.cache_clear()
     db.reset_engine()
+    if pg:
+        from sqlalchemy import text
+
+        with db.get_engine().begin() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public"))
     db.init_db()
     yield tmp_path
     db.reset_engine()

@@ -1,5 +1,6 @@
 # Render Blueprint for the API (what the live demo runs on). New → Blueprint → this repo.
-# Free plan: 0.1 CPU, sleeps after 15 min idle, files reset on restart (seed data reloads automatically).
+# Free plan: 0.1 CPU, 512 MB, sleeps after 15 min idle, disk resets on restart. With DATABASE_URL (free Neon Postgres)
+# the data survives and uploaded photos/logos are restored from the DB; without it the demo data reloads each restart.
 services:
   - type: web
     name: whats-cooking-api
@@ -26,5 +27,7 @@ services:
       - { key: GOOGLE_OAUTH_CLIENT_SECRET, sync: false }
       - { key: OAUTH_REDIRECT_URI, sync: false }   # https://<service>.onrender.com/youtube/auth/callback
       - { key: APP_SECRET, sync: false }           # make secrets
+      - { key: ADMIN_TOKEN, sync: false }          # make secrets (second value); unlocks budget settings
+      - { key: DATABASE_URL, sync: false }         # Neon Postgres: keeps branding/budget/history across restarts
       - { key: FRONTEND_ORIGIN, sync: false }      # https://<app>.vercel.app
       - { key: PUBLIC_BASE_URL, sync: false }      # https://<service>.onrender.com

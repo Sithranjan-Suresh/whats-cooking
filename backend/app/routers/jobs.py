@@ -1,6 +1,7 @@
 """Jobs: create, poll, confirm dish, list active, retry."""
 from __future__ import annotations
 
+import hmac
 import time
 from collections import defaultdict, deque
 from typing import Literal, Optional
@@ -21,6 +22,8 @@ from ..serializers import job_out
 router = APIRouter()
 
 _recent: dict[str, deque] = defaultdict(deque)
+_hourly: dict[str, deque] = defaultdict(deque)
+_ip_jobs: dict[str, list[int]] = defaultdict(list)
 
 
 def _rate_limit(ip: str) -> None:
@@ -32,6 +35,55 @@ def _rate_limit(ip: str) -> None:
     if len(q) >= limit:
         raise AppError("rate_limited", "Demo limit reached for now. Try again later.", 429, retryable=True)
     q.append(now)
+
+
+def client_ip(request: Request) -> str:
+    """The visitor's address. Render sits behind Cloudflare, which sets CF-Connecting-IP itself."""
+    for h in ("cf-connecting-ip", "true-client-ip"):
+        v = request.headers.get(h)
+        if v:
+            return v.strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _has_owner_token(request: Request) -> bool:
+    tok, real = request.headers.get("x-owner-token"), get_settings().owner_token
+    return bool(tok and real and hmac.compare_digest(tok, real))
+
+
+def _admit(request: Request, actor: Actor, session: Session) -> str:
+    """Fair use: the public app has no login, so limit each visitor and the queue as a whole.
+
+    A real owner token skips this. Raises 429 rate_limited. Returns the visitor's IP for _track().
+    """
+    ip = client_ip(request)
+    if actor != "owner":
+        _rate_limit(ip)
+    if _has_owner_token(request):
+        return ip
+    s = get_settings()
+    active = ("queued", "running")
+    mine = [j for j in _ip_jobs[ip][-20:] if (job := session.get(Job, j)) and job.status in active]
+    if len(mine) >= s.active_jobs_per_ip:
+        raise AppError("rate_limited", "You already have a video in progress. Wait for it to finish, then make the next one.",
+                       429, retryable=True)
+    busy = len(session.exec(select(Job.id).where(Job.status.in_(active))).all())
+    if busy >= s.max_queued_jobs:
+        raise AppError("rate_limited", "The studio is busy with other videos right now. Try again in a couple of minutes.",
+                       429, retryable=True)
+    q, now = _hourly[ip], time.time()
+    while q and now - q[0] > 3600:
+        q.popleft()
+    if len(q) >= s.jobs_per_hour_per_ip:
+        wait = max(1, int((3600 - (now - q[0])) // 60) + 1)
+        raise AppError("rate_limited", f"You've made {s.jobs_per_hour_per_ip} videos in the last hour. "
+                       f"Try again in about {wait} minute{'s' if wait != 1 else ''}.", 429, retryable=True)
+    q.append(now)
+    return ip
+
+
+def _track(ip: str, job_id: int) -> None:
+    _ip_jobs[ip] = [*_ip_jobs[ip][-19:], job_id]
 
 
 class JobCreate(BaseModel):
@@ -47,8 +99,7 @@ class JobCreate(BaseModel):
 @router.post("/jobs", status_code=202)
 def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_actor), session: Session = Depends(get_session)):
     r = current_restaurant(session)
-    if actor != "owner":
-        _rate_limit(request.client.host if request.client else "unknown")
+    ip = _admit(request, actor, session)
     menu_item_id = body.menu_item_id
     photo_asset_id = body.photo_asset_id
     angle = None
@@ -88,6 +139,7 @@ def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_act
     session.commit()
     session.refresh(job)
     job_queue.enqueue(job.id)
+    _track(ip, job.id)
     return JSONResponse({"job_id": job.id}, status_code=202)
 
 
@@ -155,8 +207,7 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
     old = session.get(Job, job_id)
     if not old:
         raise AppError("not_found", "Job not found", 404)
-    if actor != "owner":
-        _rate_limit(request.client.host if request.client else "unknown")
+    ip = _admit(request, actor, session)
     flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items() if k in ("not_on_menu", "continue_anyway")}
     flags["demo"] = actor != "owner"
     job = Job(
@@ -169,6 +220,7 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
     session.commit()
     session.refresh(job)
     job_queue.enqueue(job.id)
+    _track(ip, job.id)
     return JSONResponse({"job_id": job.id}, status_code=202)
 
 
@@ -196,8 +248,7 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     old = session.get(Job, job_id)
     if not old or not old.script_json:
         raise AppError("not_found", "Job or script not found", 404)
-    if actor != "owner":
-        _rate_limit(request.client.host if request.client else "unknown")
+    ip = _admit(request, actor, session)
     script = jload(old.script_json, {})
     if not body.beats or len(body.beats) > 8:
         raise AppError("validation_error", "Give 1 to 8 caption beats.", 422)
@@ -237,6 +288,7 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     session.commit()
     session.refresh(job)
     job_queue.enqueue(job.id)
+    _track(ip, job.id)
     return JSONResponse({"job_id": job.id}, status_code=202)
 
 

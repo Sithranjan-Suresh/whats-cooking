@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Security
     app_secret: str = ""  # Fernet key (urlsafe base64, 32 bytes)
     owner_token: str = ""
+    admin_token: str = ""  # required to change budget settings (PATCH /settings); unset = settings locked
 
     # Modes
     demo_mode: bool = True
@@ -42,6 +43,9 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"  # used to build absolute media URLs
 
     # Storage
+    # DATABASE_URL (Postgres, e.g. Neon) keeps branding, budget and history across restarts of hosts with
+    # no persistent disk. Unset = SQLite at $DATA_DIR/app.db.
+    database_url: str = ""
     data_dir: Path = BACKEND_ROOT / "data"
     seed_dir: Path = REPO_ROOT / "seed"
     fonts_dir: Path = BACKEND_ROOT / "assets" / "fonts"
@@ -56,6 +60,11 @@ class Settings(BaseSettings):
     ffmpeg_parallel: int = 1     # concurrent ffmpeg processes per server
     workers: int = 2
     demo_jobs_per_hour_per_ip: int = 12
+    # Fair use for everyone (the live app has no login): per-IP hourly limit, one video in progress per IP,
+    # and a cap on the whole queue so one visitor can't stall the studio.
+    jobs_per_hour_per_ip: int = 6
+    active_jobs_per_ip: int = 1
+    max_queued_jobs: int = 4
 
     @property
     def media_dir(self) -> Path:
