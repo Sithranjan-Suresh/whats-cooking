@@ -63,10 +63,11 @@ def find_invented_claims(text: str, menu_description: Optional[str]) -> list[str
     return hits
 
 
-def validate_script(script: dict, menu_row: dict, length_s: int, *, not_on_menu: bool = False) -> list[str]:
-    """Return a list of problems (empty = valid)."""
+def validate_script(script: dict, menu_row: dict, length_s: int, *, not_on_menu: bool = False,
+                    narrated: bool = True) -> list[str]:
+    """Return a list of problems (empty = valid). narrated=False: formats without a narrator (no voiceover)."""
     problems: list[str] = []
-    for key in ("hook", "beats", "voiceover", "title"):
+    for key in ("hook", "beats", "voiceover", "title") if narrated else ("hook", "beats", "title"):
         if not script.get(key):
             problems.append(f"missing {key}")
     if problems:
@@ -181,7 +182,12 @@ ANGLE_HOOKS = {
 
 
 def template_script(menu_row: dict, angle: Optional[str], restaurant_name: str, length_s: int = 15,
-                    *, not_on_menu: bool = False, visual_notes: str = "") -> dict:
+                    *, not_on_menu: bool = False, visual_notes: str = "", fmt: str = "classic") -> dict:
+    from .formats import get as get_format
+
+    f = get_format(fmt)
+    if not f.narrated:
+        return _template_unnarrated(menu_row, restaurant_name, length_s, f, not_on_menu=not_on_menu, visual_notes=visual_notes)
     name = menu_row.get("name") or "our special"
     price = None if not_on_menu else menu_row.get("price")
     desc = (menu_row.get("description") or "").rstrip(".")
@@ -231,6 +237,31 @@ def template_script(menu_row: dict, angle: Optional[str], restaurant_name: str, 
     return annotate_beats(script, menu_row)
 
 
+def _template_unnarrated(menu_row: dict, restaurant_name: str, length_s: int, f, *, not_on_menu: bool,
+                         visual_notes: str) -> dict:
+    """Safe fallback for formats without a narrator: casual lowercase captions, no price on screen."""
+    name = (menu_row.get("name") or "our special") if not not_on_menu else "today's special"
+    place = restaurant_name.lower()
+    if f.key == "chef_pov":
+        hook, beats = "pov: your order's up", [f"pov: plating the\n{name.lower()}", f"@ {place}"]
+    else:
+        hook, beats = "wait for it", [name.lower(), f"@ {place}"]
+    desc = (menu_row.get("description") or "").rstrip(".")
+    facts = [{"field": "name", "value": name}] if not not_on_menu else []
+    tag = "#" + re.sub(r"[^A-Za-z0-9]", "", name.title())[:30]
+    script = {
+        "hook": hook,
+        "beats": [{"caption": wrap_caption(b), "seconds": length_s / len(beats)} for b in beats],
+        "voiceover": "",
+        "veo_prompt": "Photorealistic, " + f.veo_note + "." + (f" Details: {visual_notes}" if visual_notes else ""),
+        "title": f"{name} at {restaurant_name}"[:70],
+        "description": f"{name} at {restaurant_name}." + (f" {desc}." if desc else ""),
+        "hashtags": [t for t in [tag, "#food", "#foodie", "#asmr"] if len(t) > 1][:5],
+        "facts_used": facts,
+    }
+    return annotate_beats(script, menu_row)
+
+
 async def write_script(
     *,
     menu_row: dict,
@@ -243,20 +274,21 @@ async def write_script(
     angle_metric: Optional[str] = None,
     not_on_menu: bool = False,
     use_cache: bool = True,
+    fmt: str = "classic",
 ) -> tuple[dict, str, Optional[str]]:
     """Returns (script, source, note). source ∈ gemini|gemini_repaired|template.
 
     Successful AI scripts are cached per (menu row, angle, tone, style, length, visual notes), so retries and
     rehearsals don't burn free-tier quota. Pass use_cache=False to force a fresh draft.
     """
-    key = gemini.cache_key("script", menu_row, restaurant_name, angle, tone, style, length_s, visual_notes, angle_metric, not_on_menu)
+    key = gemini.cache_key("script", menu_row, restaurant_name, angle, tone, style, length_s, visual_notes, angle_metric, not_on_menu, fmt)
     if use_cache:
         hit = gemini.cache_get(key)
         if hit is not None:
             return hit["script"], hit["source"], None
     script, source, note = await _write_script(
         menu_row=menu_row, restaurant_name=restaurant_name, angle=angle, tone=tone, style=style, length_s=length_s,
-        visual_notes=visual_notes, angle_metric=angle_metric, not_on_menu=not_on_menu,
+        visual_notes=visual_notes, angle_metric=angle_metric, not_on_menu=not_on_menu, fmt=fmt,
     )
     if source != "template":
         gemini.cache_put(key, {"script": script, "source": source})
@@ -274,7 +306,11 @@ async def _write_script(
     visual_notes: str,
     angle_metric: Optional[str] = None,
     not_on_menu: bool = False,
+    fmt: str = "classic",
 ) -> tuple[dict, str, Optional[str]]:
+    from .formats import get as get_format
+
+    narrated = get_format(fmt).narrated
     row = dict(menu_row)
     if not_on_menu:
         row = {"name": None, "price": None, "description": None}
@@ -287,18 +323,19 @@ async def _write_script(
         length_s=length_s,
         visual_notes=visual_notes,
         angle_metric=angle_metric,
+        fmt=fmt,
     )
     note = None
     try:
         raw = await gemini.write_script_raw(system, prompt)
         script = normalize_script(raw, length_s)
-        problems = validate_script(script, menu_row, length_s, not_on_menu=not_on_menu)
+        problems = validate_script(script, menu_row, length_s, not_on_menu=not_on_menu, narrated=narrated)
         if not problems:
             return annotate_beats(script, menu_row), "gemini", None
         log.info("script failed validation: %s → repair", problems)
         raw = await gemini.write_script_raw(system, prompt, repair_note="; ".join(problems))
         script = normalize_script(raw, length_s)
-        problems = validate_script(script, menu_row, length_s, not_on_menu=not_on_menu)
+        problems = validate_script(script, menu_row, length_s, not_on_menu=not_on_menu, narrated=narrated)
         if not problems:
             return annotate_beats(script, menu_row), "gemini_repaired", None
         note = "Template script (AI draft broke a grounding rule)"
@@ -312,7 +349,7 @@ async def _write_script(
         }.get(e.kind, "Template script (AI error)")
         log.warning("script gemini error %s → template", e.kind)
     return (
-        template_script(menu_row, angle, restaurant_name, length_s, not_on_menu=not_on_menu, visual_notes=visual_notes),
+        template_script(menu_row, angle, restaurant_name, length_s, not_on_menu=not_on_menu, visual_notes=visual_notes, fmt=fmt),
         "template",
         note,
     )

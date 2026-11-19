@@ -20,7 +20,7 @@ from sqlmodel import select
 from .config import get_settings
 from .db import session_scope
 from .models import Asset, Insight, Job, MenuItem, Restaurant, Video, jdump, jload, utcnow
-from .services import budget, gemini, render, scripts, tts, veo
+from .services import formats, budget, gemini, render, scripts, tts, veo
 from .services.insights import top_matches
 from .services.media import FFmpegError, probe_video
 from .util import fmt_price
@@ -167,6 +167,7 @@ class Ctx:
             self.length_s = job.length_s if job.length_s in (8, 15, 30) else 8
             self.veo_requested = job.veo_requested
             self.flags = _flags(job)
+            self.fmt = formats.get(self.flags.get("format"))
             self.analyze = jload(job.analyze_json, {}) or {}
             self.script = jload(job.script_json, None)
             r = s.get(Restaurant, job.restaurant_id)
@@ -201,6 +202,8 @@ class Ctx:
                 for m in s.exec(select(MenuItem).where(MenuItem.restaurant_id == r.id)).all()
             ]
         self.card_task: "Optional[asyncio.Task[Path]]" = None
+        # formats without a slate use the whole length for motion
+        self.main_len = float(self.length_s) if self.fmt.overlay_end else self.length_s - render.END_CARD_S
         self.work = get_settings().media_dir / "work" / f"job_{job_id}"
         self.work.mkdir(parents=True, exist_ok=True)
 
@@ -262,7 +265,8 @@ async def run_real(ctx: Ctx) -> None:
         await _script(ctx)
     # ---- Visuals (the logo ending is painted meanwhile)
     set_stage(jid, "visuals", "running")
-    _start_end_card(ctx)
+    if not ctx.fmt.overlay_end:
+        _start_end_card(ctx)
     visuals = await _visuals(ctx)
     # ---- Voice
     set_stage(jid, "voice", "running")
@@ -354,6 +358,7 @@ async def _script(ctx: Ctx) -> None:
         visual_notes=ctx.analyze.get("visual_notes", ""),
         angle_metric=_angle_metric(ctx),
         not_on_menu=bool(ctx.flags.get("not_on_menu")),
+        fmt=ctx.fmt.key,
     )
     script["source"] = source
     ctx.script = script
@@ -375,7 +380,7 @@ def _start_end_card(ctx: Ctx) -> "asyncio.Task[Path]":
 
 async def _visuals(ctx: Ctx) -> Path:
     jid = ctx.job_id
-    main_len = ctx.length_s - render.END_CARD_S
+    main_len = ctx.main_len
     fallback = None
     if ctx.veo_requested:
         if ctx.flags.get("demo"):
@@ -426,6 +431,9 @@ async def _visuals(ctx: Ctx) -> Path:
 
 async def _voice(ctx: Ctx) -> Optional[dict]:
     jid = ctx.job_id
+    if not ctx.fmt.narrated or not (ctx.script.get("voiceover") or "").strip():
+        set_stage(jid, "voice", "skipped", "No narrator in this format: the food does the talking")
+        return None
     v = await tts.synthesize(ctx.script.get("voiceover", ""), ctx.restaurant["tts_voice"],
                              ctx.work / "voice.mp3", tone=ctx.restaurant["voice_tone"])
     if v is None:
@@ -438,8 +446,10 @@ async def _voice(ctx: Ctx) -> Optional[dict]:
 
 
 async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
+    if ctx.fmt.overlay_end:
+        return await _assemble_loop(ctx, visuals)
     jid = ctx.job_id
-    main_len = ctx.length_s - render.END_CARD_S
+    main_len = ctx.main_len
     speech = None
     if voice and voice.get("timings"):
         speech = (voice["timings"][0]["start"] + 0.3, voice["timings"][-1]["end"] + 0.3)
@@ -458,6 +468,29 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
         raise StageFailed("assemble", "Render failed. Retry.") from e
     _finish(ctx, out, poster, info)
     set_stage(jid, "assemble", "done", f"{info['duration_s']:.0f}s · {info['bytes'] / 1e6:.1f} MB")
+
+
+async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
+    """Formats without a slate (money shot, chef POV): corner logo, name at the end, loops."""
+    jid = ctx.job_id
+    dish = None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("name")
+    outro = ctx.restaurant["name"] + (f" · {dish}" if dish else "")
+    # captions and the name line finish before the last moment blends back into the first (clean loop)
+    ass = render.build_ass(ctx.script, ctx.main_len - render.LOOP_XFADE, color_primary=ctx.restaurant["color_primary"],
+                           color_accent=ctx.restaurant["color_accent"], style=ctx.fmt.caption_style, outro=outro)
+    media = get_settings().media_dir
+    out = media / "videos" / f"job_{jid}_{secrets.token_hex(8)}.mp4"
+    try:
+        await render.assemble_loop_with_retry(work=ctx.work, visuals=visuals, total=ctx.main_len, ass_text=ass,
+                                              logo=ctx.logo_path, music=ctx.music_path,
+                                              ambient=ctx.work / "ambient.m4a", out_path=out)
+        poster = await render.extract_poster(out, media / "posters" / (out.stem + ".jpg"))
+        info = await probe_video(out)
+    except FFmpegError as e:
+        raise StageFailed("assemble", "Render failed. Retry.") from e
+    _finish(ctx, out, poster, info)
+    sound = "kitchen sound" if (ctx.work / "ambient.m4a").exists() else "music"
+    set_stage(jid, "assemble", "done", f"{info['duration_s']:.0f}s loop · {sound} · {info['bytes'] / 1e6:.1f} MB")
 
 
 def _finish(ctx: Ctx, out: Path, poster: Optional[Path], info: dict, *, mode: Optional[str] = None,

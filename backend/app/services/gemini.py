@@ -380,7 +380,11 @@ def build_script_prompt(
     length_s: int,
     visual_notes: str,
     angle_metric: Optional[str] = None,
+    fmt: str = "classic",
 ) -> tuple[str, str]:
+    from .formats import get as get_format
+
+    f = get_format(fmt)
     words = vo_words(length_s)
     beats_n = n_beats(length_s)
     main_len = length_s - END_CARD_S
@@ -393,13 +397,14 @@ VISUAL_NOTES: {visual_notes or 'n/a'}
 ANGLE: {ANGLE_NOTES.get(angle, ANGLE_NOTES[None])}{(' Real sales fact you may use: ' + angle_metric) if angle_metric else ''}
 TONE: {TONES.get(tone, TONES['upbeat'])}
 STYLE: {STYLE_NOTES.get(style, STYLE_NOTES['bold'])}
-LENGTH: {length_s} seconds total (the last {END_CARD_S:g}s is an animated logo end card).
+FORMAT: {f.script_note}
+LENGTH: {length_s} seconds total{f' (the last {END_CARD_S:g}s is an animated logo end card)' if not f.overlay_end else ''}.
 
 Write JSON:
 - hook: scroll-stopping opener, max {6 if length_s <= 8 else 8} words.
-- beats: {beats_n} short on-screen captions. Each caption max 2 lines of max 22 characters per line (use \\n for the line break). 'seconds' per beat must sum to about {main_len:g}.
-- voiceover: spoken script, max {words} words, natural to read aloud, mentions the dish name.
-- veo_prompt: a prompt for an image-to-video model animating this exact photo like a high-end food commercial: real action fitting this dish (e.g. chef's hands spooning sauce or garnish, sizzle, steam billowing, a spoon lifting a portion) plus a smooth cinematic push-in. No faces, no text, no logos; keep the dish recognisable.
+- beats: {beats_n} short on-screen captions. Each caption max 2 lines of max 22 characters per line (use \\n for the line break). 'seconds' per beat must sum to about {main_len if not f.overlay_end else length_s:g}. The dish name must appear in a caption{'' if f.narrated else ' (there is no narrator)'}.
+- voiceover: {f'spoken script, max {words} words, natural to read aloud, mentions the dish name.' if f.narrated else 'an empty string: this format has no narrator.'}
+- veo_prompt: a prompt for an image-to-video model animating this exact photo as {f.veo_note}. No faces, no text, no logos; keep the dish recognisable.
 - title: YouTube title, max 70 characters, includes the dish name.
 - description: 1-2 sentences for the YouTube description, follows the hard rules.
 - hashtags: up to 5, each starting with #, no spaces.

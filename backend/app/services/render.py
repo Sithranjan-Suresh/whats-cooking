@@ -26,7 +26,12 @@ STYLE_PRESETS = {
     "bold": {"size": 78, "outline": 5, "shadow": 2, "pop": True, "fade_in": 90, "fade_out": 60, "chars": 17, "kb": "dynamic"},
     "warm": {"size": 66, "outline": 3, "shadow": 3, "pop": False, "fade_in": 320, "fade_out": 260, "chars": 19, "kb": "slow"},
     "minimal": {"size": 50, "outline": 2, "shadow": 0, "pop": False, "fade_in": 180, "fade_out": 180, "chars": 24, "kb": "slow"},
+    # Looks like a person's post, not an ad: white sans, black outline, lowercase copy (formats money_shot, chef_pov)
+    "native": {"size": 58, "outline": 4, "shadow": 0, "pop": False, "fade_in": 80, "fade_out": 80, "chars": 22, "kb": "dynamic",
+               "font": "Inter", "white": True, "beat_margin": 470},
 }
+
+LOOP_XFADE = 0.4  # overlay formats: the last moment blends into the first so the Short loops
 
 
 # ------------------------------------------------------------------ helpers
@@ -232,10 +237,13 @@ def build_ass(
     color_accent: str,
     style: str = "bold",
     speech: Optional[tuple[float, float]] = None,
+    outro: Optional[str] = None,
 ) -> str:
+    """outro: small 'Restaurant · Dish' line for the last ~1.6s (formats without a logo slate)."""
     p = STYLE_PRESETS.get(style, STYLE_PRESETS["bold"])
-    text_col = ass_color(color_accent)
-    hook_col = ass_color(color_primary)
+    font = p.get("font", "Oswald")
+    text_col = ass_color("#FFFFFF") if p.get("white") else ass_color(color_accent)
+    hook_col = ass_color("#FFFFFF") if p.get("white") else ass_color(color_primary)
     outline = ass_color("#0B0B0B", 0x10)
     back = ass_color("#000000", 0x80)
     header = f"""[Script Info]
@@ -247,8 +255,9 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Beat,Oswald,{p['size']},{text_col},{text_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline']},{p['shadow']},2,50,50,300,1
-Style: Hook,Oswald,{int(p['size'] * 1.05)},{hook_col},{hook_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline'] + 1},{p['shadow']},8,50,50,230,1
+Style: Beat,{font},{p['size']},{text_col},{text_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline']},{p['shadow']},2,50,50,{p.get('beat_margin', 300)},1
+Style: Hook,{font},{int(p['size'] * 1.05)},{hook_col},{hook_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline'] + 1},{p['shadow']},8,50,50,230,1
+Style: Outro,{font},44,{ass_color("#FFFFFF")},{ass_color("#FFFFFF")},{outline},{back},-1,0,0,0,100,100,1,0,1,3,0,2,60,60,150,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -272,6 +281,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         hook_end = min(2.6, windows[0][1] if windows else 2.6)
         tags = f"{{\\fad(120,200){pop}\\fs{fs}}}"
         lines.append(f"Dialogue: 1,{_ass_time(0.05)},{_ass_time(hook_end)},Hook,,0,0,0,,{tags}{_ass_text(htxt)}")
+    if outro:
+        st = max(main_len - 1.4, 0.5)
+        lines.append(f"Dialogue: 2,{_ass_time(st)},{_ass_time(main_len)},Outro,,0,0,0,,{{\\fad(150,120)}}{_ass_text(outro)}")
     return header + "\n".join(lines) + "\n"
 
 
@@ -607,6 +619,95 @@ async def assemble(
         cwd=work,
     )
     return out_path
+
+
+def _logo_badge(logo: Optional[Path], work: Path) -> Optional[Path]:
+    """Small round badge of the logo for the corner (formats without a slate)."""
+    if not logo or not Path(logo).exists():
+        return None
+    try:
+        im = Image.open(logo).convert("RGBA")
+    except Exception:  # noqa: BLE001
+        return None
+    size = 132
+    badge = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    disc = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(disc).ellipse((0, 0, size - 1, size - 1), fill=235)
+    badge.paste(Image.new("RGBA", (size, size), (246, 239, 228, 235)), (0, 0), disc)
+    im.thumbnail((int(size * 0.74), int(size * 0.74)), Image.LANCZOS)
+    badge.alpha_composite(im, ((size - im.width) // 2, (size - im.height) // 2))
+    out = work / "logo_badge.png"
+    badge.save(out)
+    return out
+
+
+async def assemble_loop(
+    *,
+    work: Path,
+    visuals: Path,
+    total: float,
+    ass_text: str,
+    logo: Optional[Path],
+    music: Optional[Path],
+    ambient: Optional[Path],
+    out_path: Path,
+    safe: bool = False,
+) -> Path:
+    """Formats without a slate: full-length motion, corner logo, captions, and the last LOOP_XFADE seconds blend
+    into the first frames so the Short loops. Sound: the AI clip's own audio up front; music only if there is none."""
+    link_fonts(work)
+    (work / "captions.ass").write_text(ass_text, encoding="utf-8")
+    badge = _logo_badge(logo, work)
+    inputs = ["-i", str(visuals)]
+    if badge:
+        inputs += ["-loop", "1", "-i", str(badge)]
+    has_amb = bool(ambient and Path(ambient).exists())
+    has_music = bool(music and Path(music).exists()) and not has_amb
+    a_idx = 1 + int(bool(badge))
+    if has_amb:
+        inputs += ["-i", str(ambient)]
+    elif has_music:
+        inputs += ["-stream_loop", "-1", "-i", str(music)]
+    x = LOOP_XFADE
+    vf = (
+        f"[0:v]setsar=1,format=yuv420p,fps={FPS},settb=AVTB,split=2[a][b];"
+        f"[a]trim=0:{total:.3f},setpts=PTS-STARTPTS[main];"
+        f"[b]trim=0:{x:.3f},setpts=PTS-STARTPTS[head];"
+        f"[main][head]xfade=transition=fade:duration={x}:offset={total - x:.3f}[looped]"
+    )
+    if badge:
+        vf += f";[looped][1:v]overlay=x=W-w-44:y=150:shortest=1:format=auto[lg]"
+        last = "[lg]"
+    else:
+        last = "[looped]"
+    vf += f";{last}ass=captions.ass:fontsdir=fonts,format=yuv420p[vout]"
+    fmt = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
+    if has_amb:
+        af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,apad,atrim=0:{total:.3f},asetpts=N/SR/TB,"
+              f"afade=t=in:d=0.12,afade=t=out:st={total - x:.3f}:d={x}[aout]")
+    elif has_music:
+        af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,volume=-12dB,afade=t=in:d=0.3,"
+              f"afade=t=out:st={total - 0.6:.3f}:d=0.6[aout]")
+    else:
+        af = f"anullsrc=r=44100:cl=stereo,atrim=0:{total:.3f}[aout]"
+    preset = "ultrafast" if safe else get_settings().render_preset
+    crf = "27" if preset == "ultrafast" else "23"
+    await ffmpeg(
+        [*inputs, "-filter_complex", vf + ";" + af, "-map", "[vout]", "-map", "[aout]",
+         "-t", f"{total:.3f}", "-r", str(FPS),
+         "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p", "-profile:v", "high",
+         "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-movflags", "+faststart", str(out_path)],
+        cwd=work,
+    )
+    return out_path
+
+
+async def assemble_loop_with_retry(**kw) -> Path:
+    try:
+        return await assemble_loop(**kw, safe=False)
+    except FFmpegError as e:
+        log.warning("loop assemble failed, retrying with safe preset: %s", e.stderr_tail[-400:])
+        return await assemble_loop(**kw, safe=True)
 
 
 async def assemble_with_retry(**kw) -> Path:

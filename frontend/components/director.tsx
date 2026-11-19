@@ -13,12 +13,14 @@ const IDEAS = ["Steamy close-up", "Make it cozy", "More energy", "Slow and elega
 export function DirectorPanel({
   menuItemId,
   dishName,
+  format,
   storyboard,
   onStoryboard,
   onPreview,
 }: {
   menuItemId: number;
   dishName: string;
+  format: string;
   storyboard: Storyboard | null;
   onStoryboard: (sb: Storyboard | null) => void;
   onPreview: (url: string | null) => void;
@@ -41,7 +43,7 @@ export function DirectorPanel({
     if (message) setTurns(history);
     try {
       const r = await api<DirectorPlan>("/director/plan", {
-        json: { menu_item_id: menuItemId, message: message ?? null, storyboard, history: turns.slice(-16) },
+        json: { menu_item_id: menuItemId, message: message ?? null, storyboard, history: turns.slice(-16), format },
       });
       onStoryboard(r.storyboard);
       setChips(r.suggestions);
@@ -65,7 +67,7 @@ export function DirectorPanel({
     onPreview(null);
     if (!storyboard) ask();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuItemId]);
+  }, [menuItemId, format]);
 
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -125,13 +127,18 @@ export function DirectorPanel({
                   </li>
                 ))}
                 <li className="flex items-center gap-3 rounded-lg border border-dashed border-line px-3 py-2 text-xs text-muted">
-                  <span className="font-display text-lg leading-none text-gold/60">★</span> Your logo, the dish and its price
+                  <span className="font-display text-lg leading-none text-gold/60">★</span>
+                  {format === "classic" ? "Your logo, the dish and its price" : "Your logo in the corner, your name at the end, then it loops"}
                 </li>
               </ol>
             </div>
             <div>
               <Label>🎙 Narration</Label>
-              <p className="text-sm italic text-cream/90">&ldquo;{storyboard.voiceover}&rdquo;</p>
+              {storyboard.voiceover ? (
+                <p className="text-sm italic text-cream/90">&ldquo;{storyboard.voiceover}&rdquo;</p>
+              ) : (
+                <p className="text-sm text-muted">None: this style lets the food sound do the talking.</p>
+              )}
             </div>
             <div className="flex flex-wrap items-start gap-3">
               <div className="min-w-[180px] flex-1">

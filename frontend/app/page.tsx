@@ -290,6 +290,7 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
   const [source, setSource] = useState<"csv" | "photo">("photo");
   // Director mode: plan the Short in a chat before rendering
   const [mode, setMode] = useState<"quick" | "director">("quick");
+  const [format, setFormat] = useState<VideoFormat>("money_shot");
   const [directed, setDirected] = useState<{ id: number; name: string; key: string } | null>(null);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [opening, setOpening] = useState(false);
@@ -373,7 +374,7 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
       const directing = mode === "director" && directed && storyboard;
       const menuItemId = directing ? directed!.id : await ensureDish();
       const r = await api<{ job_id: number }>("/jobs", {
-        json: { mode: "menu", menu_item_id: menuItemId, length_s: 8, style: "bold", veo, ...(directing ? { storyboard } : {}) },
+        json: { mode: "menu", menu_item_id: menuItemId, length_s: 8, style: "bold", veo, format, ...(directing ? { storyboard } : {}) },
       });
       onStarted(r.job_id);
       usage.mutate();
@@ -482,7 +483,36 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg p-1 text-sm font-semibold" role="group" aria-label="How to make it">
+      <div className="mt-6">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">Style</div>
+        <div className="grid gap-2 sm:grid-cols-3" role="group" aria-label="Video style">
+          {FORMATS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={format === f.key}
+              onClick={() => {
+                setFormat(f.key);
+                setStoryboard(null); // the director re-plans for the new style
+              }}
+              className={cx(
+                "rounded-xl border p-3 text-left transition",
+                format === f.key ? "border-gold bg-gold/10 shadow-[0_0_0_1px_rgb(var(--gold)/.5)]" : "border-line hover:border-gold/50",
+              )}
+            >
+              <div className="text-sm font-semibold text-cream">
+                {f.emoji} {f.label}
+                {f.key === "money_shot" && <span className="ml-1.5 rounded-full bg-gold/20 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-gold">Best for views</span>}
+              </div>
+              <div className="mt-0.5 text-xs text-muted">{f.sub}</div>
+            </button>
+          ))}
+        </div>
+        {format !== "classic" && (
+          <p className="mt-2 text-[11px] text-muted">The sound comes from AI motion (sizzle, crunch, pour). Free photo motion uses music instead.</p>
+        )}
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg p-1 text-sm font-semibold" role="group" aria-label="How to make it">
         {(
           [
             ["quick", "⚡ Quick take", "AI plans it, one tap"],
@@ -503,7 +533,7 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
       </div>
       {mode === "director" &&
         (directed ? (
-          <DirectorPanel menuItemId={directed.id} dishName={directed.name} storyboard={storyboard} onStoryboard={setStoryboard} onPreview={onPreview} />
+          <DirectorPanel menuItemId={directed.id} dishName={directed.name} format={format} storyboard={storyboard} onStoryboard={setStoryboard} onPreview={onPreview} />
         ) : (
           <div className="mt-4 rounded-xl border border-dashed border-gold/40 p-4 text-center">
             <p className="text-sm text-cream">Plan your Short with an AI director: pick the mood, what the camera shows and what the narrator says, then render.</p>
@@ -720,9 +750,10 @@ function ResultPanel({
             {(job?.stages ?? []).map((st) => (
               <li key={st.name} className={cx("flex justify-between gap-2", st.status === "done" ? "text-ok" : st.status === "running" ? "text-gold" : "text-muted/60")}>
                 <span>
-                  {st.status === "done" ? "✓" : st.status === "running" ? "●" : "○"} {label(st.name)}
+                  {st.status === "done" ? "✓" : st.status === "running" ? "●" : st.status === "skipped" ? "–" : "○"}{" "}
+                  {st.status === "skipped" && st.name === "voice" ? "No narrator: the food does the talking" : label(st.name)}
                 </span>
-                <span>{eta(st.name)}</span>
+                <span>{st.status === "skipped" ? "" : eta(st.name)}</span>
               </li>
             ))}
           </ol>
@@ -767,6 +798,13 @@ function ResultPanel({
     </div>
   );
 }
+
+type VideoFormat = "money_shot" | "chef_pov" | "classic";
+const FORMATS: { key: VideoFormat; emoji: string; label: string; sub: string }[] = [
+  { key: "money_shot", emoji: "🔥", label: "Money shot", sub: "Up-close sizzle and crunch, no narrator, loops" },
+  { key: "chef_pov", emoji: "👨‍🍳", label: "Chef POV", sub: "Your hands finishing the order, kitchen sound" },
+  { key: "classic", emoji: "🎙", label: "Classic", sub: "Narrated promo ending on your logo" },
+];
 
 const STEP_LABEL: Record<string, string> = {
   analyze: "Reading your dish",

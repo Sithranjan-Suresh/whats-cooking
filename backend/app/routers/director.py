@@ -46,6 +46,7 @@ class PlanBody(BaseModel):
     message: Optional[str] = Field(default=None, max_length=400)
     storyboard: Optional[dict] = None
     history: list[Turn] = Field(default_factory=list, max_length=24)
+    format: Literal["classic", "money_shot", "chef_pov"] = "classic"
 
 
 def _dish(session: Session, menu_item_id: int) -> tuple[MenuItem, Optional[Asset]]:
@@ -81,6 +82,7 @@ async def plan(body: PlanBody, request: Request, session: Session = Depends(get_
         menu_row=scripts.menu_row_for(item), restaurant_name=r.name, tone=r.voice_tone,
         visual_notes=await _visual_notes(item, asset), current=body.storyboard,
         history=[t.model_dump() for t in body.history], message=(body.message or "").strip() or None,
+        fmt=body.format,
     )
     out["storyboard"] = director.public_storyboard(out["storyboard"])
     return out

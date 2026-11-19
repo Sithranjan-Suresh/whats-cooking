@@ -12,7 +12,7 @@ import logging
 from typing import Any, Optional
 
 from ..config import get_settings
-from . import gemini, scripts
+from . import formats, gemini, scripts
 from .gemini import GeminiError
 
 log = logging.getLogger(__name__)
@@ -51,7 +51,8 @@ STARTER_CHIPS = ["Steamy close-up", "Make it cozy", "More energy", "Mention the 
 
 
 def _prompt(*, menu_row: dict, restaurant_name: str, tone: str, visual_notes: str, angle: Optional[str],
-            current: Optional[dict], history: list[dict], message: Optional[str]) -> str:
+            current: Optional[dict], history: list[dict], message: Optional[str], fmt: str = "classic") -> str:
+    f = formats.get(fmt)
     convo = "\n".join(f"{h['role'].upper()}: {h['text']}" for h in history[-8:]) or "(none yet)"
     task = (
         f"OWNER'S REQUEST: {message}\nUpdate the storyboard to follow it (keep what they didn't ask to change)."
@@ -62,6 +63,7 @@ MENU_ROW: {json.dumps(menu_row)}
 VISUAL_NOTES: {visual_notes or 'n/a'}
 ANGLE: {gemini.ANGLE_NOTES.get(angle, gemini.ANGLE_NOTES[None])}
 TONE: {gemini.TONES.get(tone, gemini.TONES['upbeat'])}
+FORMAT: {f.script_note}
 CURRENT_STORYBOARD: {json.dumps(_public(current)) if current else '(none)'}
 CONVERSATION SO FAR:
 {convo}
@@ -71,8 +73,8 @@ CONVERSATION SO FAR:
 Write JSON:
 - hook: scroll-stopping opener, max 6 words.
 - beats: 2 short on-screen captions, each max 2 lines of max 22 characters (use \\n), 'seconds' summing to about {LENGTH_S - gemini.END_CARD_S:g}.
-- voiceover: spoken script, max {gemini.vo_words(LENGTH_S)} words, mentions the dish name.
-- veo_prompt: detailed prompt for the image-to-video model (camera move + real food action, no text/logos/faces).
+- voiceover: {f'spoken script, max {gemini.vo_words(LENGTH_S)} words, mentions the dish name.' if f.narrated else 'an empty string (this format has no narrator; the dish name goes in a caption).'}
+- veo_prompt: detailed prompt for the image-to-video model animating this exact photo as {f.veo_note} (no text/logos/faces).
 - shot: the same shot in one plain sentence for the owner (e.g. "Slow push-in as cream is spooned over the curry, steam rising").
 - title (max 70 chars, includes the dish name), description (1-2 sentences), hashtags (up to 5), facts_used.
 - reply: 1-2 friendly sentences to the owner saying what you did (or why you left something out).
@@ -87,30 +89,33 @@ def _public(sb: Optional[dict]) -> Optional[dict]:
     return {k: sb.get(k) for k in keys}
 
 
-def finalize(raw: dict, menu_row: dict) -> tuple[dict, list[str]]:
+def finalize(raw: dict, menu_row: dict, *, narrated: bool = True) -> tuple[dict, list[str]]:
     """Normalize a storyboard (from the model or the browser) and check it against the menu row."""
     sb = scripts.normalize_script(raw, LENGTH_S)
+    if not narrated:
+        sb["voiceover"] = ""
     sb["shot"] = " ".join(str(raw.get("shot") or "").split())[:240] or "Slow cinematic push-in on the dish."
-    problems = scripts.validate_script(sb, menu_row, LENGTH_S)
+    problems = scripts.validate_script(sb, menu_row, LENGTH_S, narrated=narrated)
     return scripts.annotate_beats(sb, menu_row), problems
 
 
 async def plan(*, menu_row: dict, restaurant_name: str, tone: str, visual_notes: str, angle: Optional[str] = None,
                current: Optional[dict] = None, history: Optional[list[dict]] = None,
-               message: Optional[str] = None) -> dict:
+               message: Optional[str] = None, fmt: str = "classic") -> dict:
     """One director turn. Returns {storyboard, reply, suggestions, source}."""
     history = history or []
+    narrated = formats.get(fmt).narrated
     prompt = _prompt(menu_row=menu_row, restaurant_name=restaurant_name, tone=tone, visual_notes=visual_notes,
-                     angle=angle, current=current, history=history, message=message)
+                     angle=angle, current=current, history=history, message=message, fmt=fmt)
     try:
         raw = await gemini.generate_json(prompt, DIRECTOR_SCHEMA, system=SYSTEM, timeout_s=30, temperature=0.7)
-        sb, problems = finalize(raw, menu_row)
+        sb, problems = finalize(raw, menu_row, narrated=narrated)
         if problems:
             log.info("director draft broke rules: %s → repair", problems)
             raw = await gemini.generate_json(
                 prompt + f"\n\nYour previous answer broke a rule: {'; '.join(problems)}\nFix it; follow every HARD RULE.",
                 DIRECTOR_SCHEMA, system=SYSTEM, timeout_s=30, temperature=0.2)
-            sb, problems = finalize(raw, menu_row)
+            sb, problems = finalize(raw, menu_row, narrated=narrated)
         if not problems:
             chips = [str(s)[:40] for s in (raw.get("suggestions") or []) if str(s).strip()][:3]
             return {"storyboard": sb, "reply": str(raw.get("reply") or "Here's the plan.")[:400],
@@ -122,14 +127,14 @@ async def plan(*, menu_row: dict, restaurant_name: str, tone: str, visual_notes:
 
     # Fall back: keep the current storyboard, or start from the safe template.
     if current:
-        sb, problems = finalize(current, menu_row)
+        sb, problems = finalize(current, menu_row, narrated=narrated)
         if not problems:
             msg = (f"I couldn't make that change and keep the video accurate ({reason}). Try saying it another way."
                    if reason else "The AI director is busy right now. Your storyboard is unchanged; try again in a moment.")
             return {"storyboard": sb, "reply": msg, "suggestions": STARTER_CHIPS[:3], "source": "unchanged"}
-    tpl = scripts.template_script(menu_row, angle, restaurant_name, LENGTH_S)
+    tpl = scripts.template_script(menu_row, angle, restaurant_name, LENGTH_S, fmt=fmt)
     tpl["shot"] = "Slow cinematic push-in on the dish with steam rising."
-    sb, _ = finalize(tpl, menu_row)
+    sb, _ = finalize(tpl, menu_row, narrated=narrated)
     return {"storyboard": sb, "reply": "Here's a simple starting plan. Tell me what you'd like to change.",
             "suggestions": STARTER_CHIPS[:3], "source": "template"}
 

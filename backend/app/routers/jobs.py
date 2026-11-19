@@ -39,12 +39,12 @@ def _rate_limit(ip: str) -> None:
 
 def _director_script(session: Session, body: "JobCreate", menu_item_id: Optional[int], stages: list) -> tuple[str, list]:
     """A storyboard from the browser is untrusted: normalize it and run the grounding validator again."""
-    from ..services import director, scripts as sc
+    from ..services import director, formats, scripts as sc
 
     if body.mode != "menu" or not menu_item_id or body.length_s != director.LENGTH_S:
         raise AppError("validation_error", "Director mode makes 8-second videos of a menu dish.", 422)
     item = session.get(MenuItem, menu_item_id)
-    sb, problems = director.finalize(body.storyboard, sc.menu_row_for(item))
+    sb, problems = director.finalize(body.storyboard, sc.menu_row_for(item), narrated=formats.get(body.format).narrated)
     if problems:
         raise AppError("not_grounded", "This plan doesn't match the menu: " + "; ".join(problems), 422)
     for st in stages:
@@ -111,6 +111,7 @@ class JobCreate(BaseModel):
     length_s: Literal[8, 15, 30] = 8
     veo: bool = False
     storyboard: Optional[dict] = None  # Director mode: the approved plan (re-checked against the menu here)
+    format: Literal["classic", "money_shot", "chef_pov"] = "classic"
 
 
 @router.post("/jobs", status_code=202)
@@ -144,7 +145,7 @@ def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_act
         d = budget.check(session, r.id, 8)
         if not d.allowed and d.reason in ("daily_limit", "monthly_cap"):
             raise AppError("budget_cap_reached", budget.cap_message(session, r.id, d.reason, d.est_cost_cents), 402)
-    flags = {"demo": actor != "owner"}
+    flags = {"demo": actor != "owner", "format": body.format}
     stages, script_json = initial_stages(), None
     if body.storyboard is not None:
         script_json, stages = _director_script(session, body, menu_item_id, stages)
@@ -223,7 +224,7 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
 
     old = owned(session, Job, job_id, current_restaurant(session), "Job not found")
     ip = _admit(request, actor, session)
-    flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items() if k in ("not_on_menu", "continue_anyway")}
+    flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items() if k in ("not_on_menu", "continue_anyway", "format")}
     flags["demo"] = actor != "owner"
     stages, script_json = initial_stages(), None
     old_flags = jload(old.flags_json, {}) or {}
