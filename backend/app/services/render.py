@@ -671,8 +671,9 @@ async def assemble_loop(
     x = LOOP_XFADE
     vf = (
         f"[0:v]setsar=1,format=yuv420p,fps={FPS},settb=AVTB,split=2[a][b];"
-        f"[a]trim=0:{total:.3f},setpts=PTS-STARTPTS[main];"
-        f"[b]trim=0:{x:.3f},setpts=PTS-STARTPTS[head];"
+        # ffmpeg 7 (Render): xfade needs a constant frame rate restated after trim/setpts
+        f"[a]trim=0:{total:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[main];"
+        f"[b]trim=0:{x:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[head];"
         f"[main][head]xfade=transition=fade:duration={x}:offset={total - x:.3f}[looped]"
     )
     if badge:

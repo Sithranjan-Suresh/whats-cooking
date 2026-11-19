@@ -36,9 +36,9 @@ FORMATS: dict[str, Format] = {
     ),
     "chef_pov": Format(
         "chef_pov", False, True, "native",
-        "CHEF POV: no narrator. First-person captions from the cook, lowercase, casual, max 6 words each, starting "
-        "with 'pov:' (e.g. 'pov: plating your butter chicken'). The hook is the 'pov:' line. Do not put the price "
-        "in the captions.",
+        "CHEF POV: no narrator. The hook is the only line that starts with 'pov:' (e.g. 'pov: plating your "
+        "butter chicken'). The captions are short, lowercase, first-person asides from the cook, max 5 words, no "
+        "'pov:' (e.g. 'extra sauce, always', 'butter chicken @ kumar's'). Do not put the price in the captions.",
         "a first-person POV from the cook at the pass: their hands finishing this exact dish (garnishing, saucing, "
         "wiping the rim, sliding the plate toward the camera), handheld natural camera, starts already mid-action, "
         "real busy-kitchen sound (sizzle, clatter, a ticket printer). Hands only, no faces, no music",
