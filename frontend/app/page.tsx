@@ -7,7 +7,7 @@ import useSWR from "swr";
 import { motion } from "framer-motion";
 import { acceptYouTubeConnection, addMyJob, api, fetcher, getMyJobs, setYtBlob, startYouTubeConnect, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
-import type { InsightCard, InsightsResponse, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
+import type { InsightCard, InsightsResponse, Job, MenuItem, Restaurant, SalesImportResult, Video } from "@/lib/types";
 import { useHealth, useJob, useRestaurant } from "@/hooks/data";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Button, ErrorCallout, Field, inputCls, Modal, Spinner, Toaster, useToast } from "@/components/ui";
@@ -45,9 +45,16 @@ function App() {
   const busy = !!job && !jobError && ["queued", "running"].includes(job.status);
 
   useEffect(() => {
+    // After a reload, pick up a video only while it's still being made; finished ones live in "Your videos".
     try {
       const last = window.localStorage.getItem(LAST_JOB);
-      if (last) setJobId(Number(last));
+      if (last)
+        api<Job>(`/jobs/${Number(last)}`)
+          .then((j) => {
+            if (["queued", "running", "needs_dish"].includes(j.status)) setJobId(j.id);
+            else window.localStorage.removeItem(LAST_JOB);
+          })
+          .catch(() => window.localStorage.removeItem(LAST_JOB));
     } catch {
       /* ignore */
     }
