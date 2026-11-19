@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     # Low-CPU hosts (e.g. Render free): RENDER_PRESET=ultrafast, KB_OVERSAMPLE=1
     render_preset: str = "veryfast"
     kb_oversample: float = 2.0
+    ffmpeg_threads: int = 0      # 0 = ffmpeg's default; 2 keeps a 1080x1920 encode near 100 MB on small hosts
+    ffmpeg_parallel: int = 1     # concurrent ffmpeg processes per server
     workers: int = 2
     demo_jobs_per_hour_per_ip: int = 12
 

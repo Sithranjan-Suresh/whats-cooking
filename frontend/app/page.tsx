@@ -39,7 +39,7 @@ function App() {
   const health = useHealth();
   const [jobId, setJobId] = useState<number | null>(null);
   const { job, error: jobError, refresh } = useJob(jobId);
-  const busy = !!job && ["queued", "running"].includes(job.status);
+  const busy = !!job && !jobError && ["queued", "running"].includes(job.status);
 
   useEffect(() => {
     try {
@@ -576,7 +576,14 @@ function ResultPanel({
       )}
       {jobError && jobId && (
         <div className="mx-auto mt-4 max-w-[320px]">
-          <ErrorCallout error="Lost track of that video. It may still appear below in Your videos." onRetry={refresh} />
+          <ErrorCallout
+            error={
+              jobError.status === 404
+                ? "The server restarted while making this video (free hosting), so it was lost. Hit Action! again."
+                : "Lost touch with the server. It may be waking up; retry in a minute."
+            }
+            onRetry={refresh}
+          />
         </div>
       )}
       {job?.status === "done" && job.video && (

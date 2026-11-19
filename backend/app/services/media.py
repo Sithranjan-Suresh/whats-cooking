@@ -39,8 +39,27 @@ async def run(cmd: Sequence[str], *, cwd: Optional[Path] = None, timeout: Option
     return out.decode(errors="replace")
 
 
+_ffmpeg_slots: dict = {}  # event loop → Semaphore (asyncio primitives are bound to one loop)
+
+
 async def ffmpeg(args: Sequence[str], *, cwd: Optional[Path] = None, timeout: Optional[float] = None) -> None:
-    await run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args], cwd=cwd, timeout=timeout)
+    """Run ffmpeg, one at a time per process.
+
+    A 1080x1920 x264 encode can take 300+ MB, so two at once (e.g. end card + AI clip) can blow a 512 MB
+    host. FFMPEG_THREADS caps threads per encode (memory grows with threads; containers often see many cores).
+    """
+    loop = asyncio.get_running_loop()
+    slots = _ffmpeg_slots.get(loop)
+    if slots is None:
+        slots = _ffmpeg_slots[loop] = asyncio.Semaphore(max(1, get_settings().ffmpeg_parallel))
+    args = list(args)
+    n = get_settings().ffmpeg_threads
+    head = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
+    if n > 0:
+        head += ["-filter_threads", str(n)]
+        args = [*args[:-1], "-threads", str(n), args[-1]]  # output option, placed right before the output file
+    async with slots:
+        await run([*head, *args], cwd=cwd, timeout=timeout)
 
 
 async def probe(path: Path) -> dict:

@@ -15,6 +15,7 @@ services:
       - { key: WORKERS, value: "1" }
       - { key: RENDER_PRESET, value: ultrafast }
       - { key: KB_OVERSAMPLE, value: "1" }
+      - { key: FFMPEG_THREADS, value: "2" }
       - { key: FFMPEG_TIMEOUT_S, value: "600" }
       - { key: VEO_TIMEOUT_S, value: "300" }
       - { key: SEED_RENDER, value: "0" }

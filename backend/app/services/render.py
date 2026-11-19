@@ -165,7 +165,7 @@ async def veo_plus_tail(veo_clip: Path, photo: Path, total_s: float, work: Path,
         await ffmpeg(
             ["-i", str(veo_clip), "-an", "-vf",
              f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS},setsar=1,format=yuv420p",
-             "-t", f"{total_s:.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", out.name],
+             "-t", f"{total_s:.3f}", "-c:v", "libx264", "-preset", get_settings().render_preset, "-crf", "20", out.name],
             cwd=work,
         )
         return out
@@ -180,7 +180,7 @@ async def veo_plus_tail(veo_clip: Path, photo: Path, total_s: float, work: Path,
     )
     await ffmpeg(
         ["-i", str(veo_clip), "-i", tail.name, "-filter_complex", fc, "-map", "[v]", "-an", "-t", f"{total_s:.3f}",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", out.name],
+         "-c:v", "libx264", "-preset", get_settings().render_preset, "-crf", "20", "-pix_fmt", "yuv420p", out.name],
         cwd=work,
     )
     return out
@@ -381,7 +381,7 @@ async def animated_end_card(
     out = work / "endcard.mp4"
     await ffmpeg(
         ["-framerate", str(CARD_FPS), "-i", str(frames_dir / "f%04d.jpg"), "-vf", f"fps={FPS}", "-c:v", "libx264",
-         "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", str(out)],
+         "-preset", get_settings().render_preset, "-crf", "18", "-pix_fmt", "yuv420p", str(out)],
     )
     shutil.rmtree(frames_dir, ignore_errors=True)
     return out
