@@ -13,7 +13,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
-from ..db import get_app_settings, get_engine
+from ..db import get_app_settings, get_engine, template_restaurant
 from ..models import AppSettings, UsageLedger
 
 _lock = threading.Lock()
@@ -22,6 +22,12 @@ ACTIVE = ("reserved", "committed")
 
 # Hard ceiling on estimated AI-motion spend per month, whatever the settings say. Raising it needs a code change.
 HARD_CAP_CENTS = 1000
+
+
+def _global_settings(session: Session) -> AppSettings:
+    """Every studio (workspace) shares ONE budget: the template restaurant's settings and the whole ledger.
+    Otherwise each new browser would get its own $10."""
+    return get_app_settings(session, template_restaurant(session).id)
 
 
 def _cap(st: AppSettings) -> int:
@@ -42,10 +48,8 @@ def _today() -> date:
 
 def usage_snapshot(session: Session, restaurant_id: int, today: Optional[date] = None) -> dict:
     today = today or _today()
-    st = get_app_settings(session, restaurant_id)
-    rows = session.exec(
-        select(UsageLedger).where(UsageLedger.restaurant_id == restaurant_id, UsageLedger.state.in_(ACTIVE))
-    ).all()
+    st = _global_settings(session)
+    rows = session.exec(select(UsageLedger).where(UsageLedger.state.in_(ACTIVE))).all()
     clips_today = sum(1 for r in rows if r.date == today)
     month_cents = sum(r.est_cost_cents for r in rows if (r.date.year, r.date.month) == (today.year, today.month))
     return {
@@ -58,7 +62,7 @@ def usage_snapshot(session: Session, restaurant_id: int, today: Optional[date] =
 
 def check(session: Session, restaurant_id: int, seconds: int = 8, today: Optional[date] = None) -> Decision:
     """Read-only preview of what reserve_veo would decide (used by the UI)."""
-    st = get_app_settings(session, restaurant_id)
+    st = _global_settings(session)
     snap = usage_snapshot(session, restaurant_id, today)
     est = seconds * st.veo_cost_per_sec_cents
     if st.free_mode:
@@ -74,15 +78,11 @@ def reserve_veo(restaurant_id: int, job_id: int, seconds: int = 8, today: Option
     today = today or _today()
     with _lock:
         with Session(get_engine()) as session:
-            st: AppSettings = get_app_settings(session, restaurant_id)
+            st: AppSettings = _global_settings(session)
             est = seconds * st.veo_cost_per_sec_cents
             if st.free_mode:
                 return Decision(False, "free_mode", est)
-            rows = session.exec(
-                select(UsageLedger).where(
-                    UsageLedger.restaurant_id == restaurant_id, UsageLedger.state.in_(ACTIVE)
-                )
-            ).all()
+            rows = session.exec(select(UsageLedger).where(UsageLedger.state.in_(ACTIVE))).all()
             clips_today = sum(1 for r in rows if r.date == today)
             if clips_today >= st.daily_veo_clip_limit:
                 return Decision(False, "daily_limit", est)
@@ -127,7 +127,7 @@ DENY_MESSAGES = {
 
 
 def cap_message(session: Session, restaurant_id: int, reason: str, est_cents: int) -> str:
-    st = get_app_settings(session, restaurant_id)
+    st = _global_settings(session)
     if reason == "daily_limit":
         return (f"Today's {st.daily_veo_clip_limit} AI videos are used up (they reset tomorrow). "
                 "You can still make this one with free photo motion.")

@@ -1,10 +1,13 @@
 """Database engine + session helpers. Postgres when DATABASE_URL is set, otherwise SQLite."""
+import contextvars
 import logging
+import re
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Optional
 
 from sqlalchemy import event, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from .config import ensure_dirs, get_settings
@@ -104,11 +107,57 @@ def session_scope() -> Iterator[Session]:
         yield session
 
 
-def current_restaurant(session: Session) -> models.Restaurant:
-    r = session.exec(select(models.Restaurant).order_by(models.Restaurant.id)).first()
+# ------------------------------------------------------------------ workspaces (one studio per browser)
+#
+# The public app has no login. Each browser makes a random workspace id (X-Workspace, 32 hex) and gets its own
+# restaurant, cloned on first use from the template (the seeded demo, slug without "ws-"). Requests without a
+# workspace see the template read-only (writes need an owner/admin token, enforced in main.WorkspaceMiddleware).
+
+workspace_var: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar("workspace", default=None)
+WORKSPACE_RE = re.compile(r"^[0-9a-f]{32}$")
+WS_PREFIX = "ws-"
+
+
+def template_restaurant(session: Session) -> models.Restaurant:
+    r = session.exec(
+        select(models.Restaurant).where(~models.Restaurant.slug.startswith(WS_PREFIX)).order_by(models.Restaurant.id)
+    ).first()
     if r is None:
         raise AppError("not_seeded", "No restaurant yet. Run `make seed`.", 409)
     return r
+
+
+def _create_workspace(session: Session, tpl: models.Restaurant, slug: str) -> models.Restaurant:
+    """A new studio: the template's branding and menu (sharing its photos), no sales, no videos."""
+    r = models.Restaurant(name=tpl.name, slug=slug, logo_asset_id=tpl.logo_asset_id, color_primary=tpl.color_primary,
+                          color_accent=tpl.color_accent, voice_tone=tpl.voice_tone, tts_voice=tpl.tts_voice)
+    session.add(r)
+    try:
+        session.flush()
+        for m in session.exec(select(models.MenuItem).where(models.MenuItem.restaurant_id == tpl.id)).all():
+            session.add(models.MenuItem(restaurant_id=r.id, name=m.name, name_norm=m.name_norm, price_cents=m.price_cents,
+                                        description=m.description, category=m.category, photo_asset_id=m.photo_asset_id))
+        session.commit()
+    except IntegrityError:  # the same browser's parallel first requests: the other one created it
+        session.rollback()
+        r = session.exec(select(models.Restaurant).where(models.Restaurant.slug == slug)).one()
+    session.refresh(r)
+    return r
+
+
+def current_restaurant(session: Session) -> models.Restaurant:
+    tpl = template_restaurant(session)
+    ws = workspace_var.get()
+    if not ws:
+        return tpl
+    slug = WS_PREFIX + ws
+    r = session.exec(select(models.Restaurant).where(models.Restaurant.slug == slug)).first()
+    return r or _create_workspace(session, tpl, slug)
+
+
+def asset_usable(session: Session, asset: Optional[models.Asset], r: models.Restaurant) -> bool:
+    """A studio may use its own assets and the template's (the shared demo photos and logo)."""
+    return bool(asset) and asset.restaurant_id in (r.id, template_restaurant(session).id)
 
 
 def get_app_settings(session: Session, restaurant_id: int) -> models.AppSettings:

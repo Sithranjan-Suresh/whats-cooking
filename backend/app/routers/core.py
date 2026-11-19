@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 
 from ..auth import Actor, get_actor, require_owner
 from ..config import get_settings, media_url
-from ..db import current_restaurant, get_app_settings, get_session, keep_asset_bytes
+from ..db import asset_usable, current_restaurant, get_app_settings, get_session, keep_asset_bytes, template_restaurant
 from ..errors import AppError
 from ..models import Asset, MenuItem
 from ..serializers import menu_item_out, restaurant_out
@@ -77,7 +77,7 @@ def patch_me(body: BrandPatch, actor: Actor = Depends(get_actor), yt: Optional[d
         raise AppError("bad_voice", "Unknown voice")
     if data.get("logo_asset_id") is not None:
         a = session.get(Asset, data["logo_asset_id"])
-        if not a or a.restaurant_id != r.id:
+        if not asset_usable(session, a, r):
             raise AppError("bad_asset", "Logo asset not found", 404)
     for k, v in data.items():
         if v is not None:
@@ -202,7 +202,7 @@ def set_menu_photo(item_id: int, body: PhotoLink, actor: Actor = Depends(get_act
     a = session.get(Asset, body.asset_id)
     if not m or m.restaurant_id != r.id:
         raise AppError("not_found", "Menu item not found", 404)
-    if not a or a.restaurant_id != r.id or a.kind != "photo":
+    if not asset_usable(session, a, r) or a.kind != "photo":
         raise AppError("not_found", "Photo not found", 404)
     m.photo_asset_id = a.id
     session.add(m)
@@ -240,7 +240,7 @@ class SettingsPatch(BaseModel):
 
 @router.get("/settings")
 def get_settings_route(session: Session = Depends(get_session)):
-    r = current_restaurant(session)
+    r = template_restaurant(session)  # one shared budget for every studio
     return get_app_settings(session, r.id).model_dump()
 
 
@@ -255,7 +255,7 @@ def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
 
 @router.patch("/settings")
 def patch_settings(body: SettingsPatch, _: None = Depends(require_admin), session: Session = Depends(get_session)):
-    r = current_restaurant(session)
+    r = template_restaurant(session)  # one shared budget for every studio
     st = get_app_settings(session, r.id)
     for k, v in body.model_dump(exclude_unset=True).items():
         if v is not None:

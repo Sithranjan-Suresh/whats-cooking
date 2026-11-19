@@ -8,6 +8,7 @@ from PIL import Image
 
 OWNER = {"X-Owner-Token": "test-owner"}
 ADMIN = {"X-Admin-Token": "test-admin"}
+WS = "a" * 32  # this test browser's studio id
 
 
 @pytest.fixture()
@@ -20,7 +21,7 @@ def client(restaurant, monkeypatch):
     monkeypatch.setattr(tts, "synthesize", fake_tts)
     from app.main import create_app
 
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), headers={"X-Workspace": WS}) as c:
         yield c
 
 
@@ -152,9 +153,10 @@ def test_usage_and_settings_validation(client):
 
 
 def _menu_job(client, name="Chicken Biryani", veo=False, headers=None):
-    menu = client.get("/menu").json()
+    menu = client.get("/menu", headers=headers or {}).json()
     item = next(m for m in menu if m["name"] == name)
-    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"},
+                     headers=headers or {}).json()
     r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"], "veo": veo},
                     headers=headers or {})
     return r.json()["job_id"]
@@ -426,3 +428,55 @@ def test_videos_with_lost_files_are_hidden(client):
 
     Path(get_settings().media_dir, j["video"]["url"].split("/media/", 1)[1]).unlink()
     assert not any(v["job_id"] == jid for v in client.get("/videos").json())
+
+
+# ------------------------------------------------------------------ one studio per browser
+
+def test_each_browser_gets_its_own_studio(client):
+    a, b = {"X-Workspace": "1" * 32}, {"X-Workspace": "2" * 32}
+    assert client.get("/restaurants/me", headers=a).json()["name"] == "Kumar's"  # starts as the demo
+    client.patch("/restaurants/me", json={"name": "Hello"}, headers={**a, **OWNER})
+    assert client.get("/restaurants/me", headers=a).json()["name"] == "Hello"
+    assert client.get("/restaurants/me", headers=b).json()["name"] == "Kumar's"  # another device: untouched
+    tpl = client.get("/restaurants/me", headers={"X-Workspace": ""}).json()
+    assert tpl["name"] == "Kumar's"  # the template every new studio copies is untouched
+    # the new studio got the demo menu
+    assert {m["name"] for m in client.get("/menu", headers=b).json()} >= {"Chicken Biryani"}
+    # videos and jobs are per studio
+    jid = _menu_job(client, headers={**a, **OWNER})
+    assert any(j["id"] == jid for j in client.get("/jobs", headers=a).json())
+    assert not any(j["id"] == jid for j in client.get("/jobs", headers=b).json())
+
+
+def test_writes_without_a_studio_cannot_touch_the_template(client):
+    no_ws = {"X-Workspace": ""}
+    r = client.patch("/restaurants/me", json={"name": "Hijack"}, headers=no_ws)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "workspace_required"
+    r = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}, headers=no_ws)
+    assert r.status_code == 400
+    # an owner token may still manage the template
+    assert client.patch("/restaurants/me", json={"name": "Kumar's Plano"}, headers={**no_ws, **OWNER}).status_code == 200
+
+
+def test_new_studio_can_use_the_demo_photos(client):
+    no_ws_owner = {"X-Workspace": "", **OWNER}
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}, headers=no_ws_owner).json()
+    tpl_item = next(m for m in client.get("/menu", headers={"X-Workspace": ""}).json() if m["name"] == "Chicken Biryani")
+    client.post(f"/menu/{tpl_item['id']}/photo", json={"asset_id": up["asset_id"]}, headers=no_ws_owner)
+    fresh = {"X-Workspace": "3" * 32}
+    item = next(m for m in client.get("/menu", headers=fresh).json() if m["name"] == "Chicken Biryani")
+    assert item["photo_url"] and item["id"] != tpl_item["id"]
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"]}, headers=fresh)
+    assert r.status_code == 202
+
+
+def test_all_studios_share_one_ai_budget(client, monkeypatch):
+    from app.services import budget
+
+    _hold_queue(monkeypatch)
+    a, b = {"X-Workspace": "4" * 32}, {"X-Workspace": "5" * 32}
+    before = client.get("/usage", headers={**b, **OWNER}).json()["ai_videos_left"]
+    jid = _menu_job(client, headers={**a, **OWNER})
+    rid_a = client.get("/restaurants/me", headers=a).json()["id"]
+    assert budget.reserve_veo(rid_a, jid, 8).allowed
+    assert client.get("/usage", headers={**b, **OWNER}).json()["ai_videos_left"] == before - 1

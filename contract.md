@@ -14,8 +14,16 @@ Serializers: `backend/app/serializers.py`. Change this file deliberately and pre
   ```
   Common codes: `validation_error` (422), `not_found` (404), `demo_mode` (403), `bad_owner_token` (401),
   `file_too_large` (413), `bad_mime` / `bad_image` (415), `bad_csv` (400), `photo_required` (400),
-  `youtube_not_connected` (409), `budget_cap_reached` (402), `rate_limited` (429, retryable), `admin_required` / `settings_locked` (403),
+  `youtube_not_connected` (409), `budget_cap_reached` (402), `rate_limited` (429, retryable), `admin_required` / `settings_locked` (403), `workspace_required` (400),
   `internal_error` (500, retryable).
+
+## Studios (one per browser)
+
+Every request carries `X-Workspace: <32 hex>`, a random id the browser makes once and keeps in `localStorage`.
+The server gives each id its own restaurant (name, logo, colors, dishes, sales, insights, jobs, videos), copied
+from the seeded demo template on first use; the template's dish photos are shared. Without the header, reads see
+the template, and writes get 400 `workspace_required` unless they carry a valid owner or admin token.
+The AI budget (`/usage`, `/settings`, ledger) is one pot shared by all studios.
 
 ## Auth
 

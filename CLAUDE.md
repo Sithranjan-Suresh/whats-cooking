@@ -21,6 +21,7 @@ Solo project. Live: https://whats-cooking-jade.vercel.app (Vercel) + Render free
 - Test audio/video changes against the Docker image too (Render's ffmpeg 7.1 is stricter than older versions).
 - Scripts may only state name/price/description from the menu row. Keep `scripts.validate_script` strict; fix prompts, not the validator or eval cases.
 - AI-motion calls only through `budget.reserve_veo` → `commit`/`release`. Run ONE uvicorn worker (lock + queue are in-process).
+- One studio per browser: `X-Workspace` → `db.current_restaurant()` (cloned from the template on first use; `main.WorkspaceMiddleware`). The budget is global (`budget._global_settings`, ledger summed across studios).
 - `budget.HARD_CAP_CENTS` ($10) caps spend whatever the settings say; `PATCH /settings` needs `ADMIN_TOKEN`. Job creation goes through `jobs._admit` (per-IP + queue limits).
 - ffmpeg runs one at a time (`media.ffmpeg` semaphore, `FFMPEG_THREADS`): Render free has 512 MB.
 - Don't commit `.env`, `backend/data/`, or real customer sales data.

@@ -84,8 +84,9 @@ contract.md API reference        docs/planning/  the original plan (historical)
   stay on YouTube), and your YouTube connection lives in your browser.
 - **Fair use.** With no login, each visitor can have one video in progress and make 6 an hour; budget settings need
   an admin key, and AI-motion spend is capped at $10/month in code.
-- **Shared studio.** Everyone who opens the link shares one restaurant (logo, name). "Your videos" lists the ones made
-  in your browser, and YouTube is per visitor, but uploads aren't private: don't upload anything sensitive.
+- **One studio per browser, no login.** Each browser gets its own copy of the demo restaurant (name, logo, dishes,
+  videos), tied to a random id kept in that browser: a new device or a cleared browser starts fresh. Uploads aren't
+  access-controlled, so don't upload anything sensitive. The $10 AI budget is shared by everyone.
 - **YouTube privacy.** Google may keep uploads from this unverified app private until it's reviewed. The app shows the
   status YouTube actually returns.
 - **Cost estimate.** AI-motion pricing is an estimate ($0.64 per 8s); check real billing after a few videos.

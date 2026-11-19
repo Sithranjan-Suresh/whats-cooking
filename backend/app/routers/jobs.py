@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 
 from ..auth import Actor, get_actor
 from ..config import get_settings
-from ..db import current_restaurant, get_session
+from ..db import asset_usable, current_restaurant, get_session
 from ..errors import AppError
 from ..models import Asset, Insight, Job, MenuItem, jdump
 from ..pipeline import initial_stages, job_queue
@@ -119,7 +119,7 @@ def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_act
     if body.mode == "photo" and not photo_asset_id:
         raise AppError("photo_required", "Add a dish photo first.", 400)
     a = session.get(Asset, photo_asset_id)
-    if not a or a.restaurant_id != r.id or a.kind != "photo":
+    if not asset_usable(session, a, r) or a.kind != "photo":
         raise AppError("not_found", "Photo not found. Upload it again.", 404)
     if body.veo and actor == "owner":
         from ..services import budget
@@ -317,7 +317,7 @@ def create_dish(body: DishCreate, actor: Actor = Depends(get_actor), session: Se
         if price_cents is None:
             raise AppError("validation_error", "Price should look like 14.99", 422)
     a = session.get(Asset, body.photo_asset_id)
-    if not a or a.restaurant_id != r.id or a.kind != "photo":
+    if not asset_usable(session, a, r) or a.kind != "photo":
         raise AppError("not_found", "Photo not found. Upload it again.", 404)
     norm = normalize_name(name)
     item = session.exec(select(MenuItem).where(MenuItem.restaurant_id == r.id, MenuItem.name_norm == norm)).first()

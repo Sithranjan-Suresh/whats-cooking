@@ -63,8 +63,33 @@ export class ApiError extends Error {
 
 type Opts = { method?: string; json?: unknown; form?: FormData; signal?: AbortSignal };
 
+// Each browser has its own studio (restaurant name, logo, dishes, videos), copied from the demo on first use.
+// The id is random and lives only in this browser; the server keys the studio by it (X-Workspace).
+const WS_KEY = "wc_ws";
+let memoryWorkspace: string | null = null;
+
+export function getWorkspace(): string {
+  try {
+    let id = window.localStorage.getItem(WS_KEY);
+    if (!id || !/^[0-9a-f]{32}$/.test(id)) {
+      id = newWorkspaceId();
+      window.localStorage.setItem(WS_KEY, id);
+    }
+    return id;
+  } catch {
+    // storage blocked (private mode): one studio for this page load
+    return (memoryWorkspace ??= newWorkspaceId());
+  }
+}
+
+function newWorkspaceId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { "X-Workspace": getWorkspace() };
   const token = getOwnerToken();
   if (token) headers["X-Owner-Token"] = token;
   const yt = getYtBlob();
