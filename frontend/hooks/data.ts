@@ -11,8 +11,10 @@ export function useOwnerToken() {
 /** Health also tells us whether the current viewer is the owner or a demo viewer. */
 export function useHealth() {
   const token = useOwnerToken();
+  // The free server can take ~1 min to wake: retry quickly and keep re-checking.
   return useSWR<Health, ApiError>(["/health", token], () => fetcher<Health>("/health"), {
-    revalidateOnFocus: false,
+    errorRetryInterval: 3000,
+    refreshInterval: 60000,
   });
 }
 
@@ -22,7 +24,7 @@ export function useIsOwner() {
 }
 
 export function useRestaurant() {
-  return useSWR<Restaurant, ApiError>("/restaurants/me", fetcher);
+  return useSWR<Restaurant, ApiError>("/restaurants/me", fetcher, { errorRetryInterval: 3000 });
 }
 
 export function useUsage() {

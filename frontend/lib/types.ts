@@ -35,6 +35,7 @@ export interface Restaurant {
   menu_count: number;
   has_sales: boolean;
   youtube_connected: boolean;
+  youtube_configured?: boolean;
   youtube_channel_title: string | null;
   voices: { id: string; label: string }[];
 }

@@ -5,7 +5,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
-from .config import media_url
+from .config import get_settings, media_url
 from .models import Asset, Insight, Job, MenuItem, Restaurant, Video, YouTubeAuth, jload
 from .services.insights import metric_label
 from .util import fmt_price
@@ -39,6 +39,7 @@ def restaurant_out(session: Session, r: Restaurant) -> dict:
         "menu_count": menu_count,
         "has_sales": has_sales,
         "youtube_connected": yt is not None,
+        "youtube_configured": get_settings().youtube_enabled,
         "youtube_channel_title": yt.channel_title if yt else None,
     }
 

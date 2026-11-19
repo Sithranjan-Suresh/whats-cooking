@@ -95,10 +95,10 @@ function App() {
               <StepDish onStarted={track} busy={busy} />
             </div>
             <div className={cx("lg:sticky lg:top-8 lg:order-none lg:self-start", jobId ? "order-first" : "order-last")}>
-              <ResultPanel jobId={jobId} job={job} jobError={jobError} refresh={refresh} busy={busy} r={restaurant.data} ytConfigured={!!health.data?.youtube_configured} />
+              <ResultPanel jobId={jobId} job={job} jobError={jobError} refresh={refresh} busy={busy} r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
           </div>
-          <History r={restaurant.data} ytConfigured={!!health.data?.youtube_configured} />
+          <History r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
         </>
       )}
     </main>
