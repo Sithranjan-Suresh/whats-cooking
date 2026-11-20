@@ -148,7 +148,11 @@ Settings { restaurant_id, daily_veo_clip_limit, monthly_cap_cents, free_mode, ve
 | `money_shot` | no (`voiceover:""`, voice stage `skipped`) | full 8 s of motion, corner logo, name line, loops | the AI clip's own audio at full level; music only without AI motion |
 | `chef_pov` | no | same as money_shot | same as money_shot |
 
-`flags.format` on the job holds the format; retry keeps it.
+`flags.format` on the job holds the format; retry and edits keep it.
+
+**Edits** (`POST /jobs/{id}/edit` `{hook? ≤60, beats:[{caption ≤60}], voiceover? ≤400}`) re-render with the same
+format and re-run the grounding validator (422 `not_grounded`). If the original used AI motion, its clip is kept
+(`media/clips/job_<id>.mp4`) and reused: the edit costs nothing (`cost_cents: 0`, visuals note "AI motion (reused…)").
 
 ## Job lifecycle
 

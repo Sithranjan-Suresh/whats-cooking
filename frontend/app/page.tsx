@@ -604,7 +604,7 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
             >
               <div className="text-sm font-semibold text-cream">
                 {f.emoji} {f.label}
-                {f.key === "money_shot" && <span className="ml-1.5 rounded-full bg-gold/20 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-gold">Best for views</span>}
+                {f.key === "money_shot" && <span className="ml-1.5 rounded-full bg-gold/20 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-gold whitespace-nowrap">Top pick</span>}
               </div>
               <div className="mt-0.5 text-xs text-muted">{f.sub}</div>
             </button>
@@ -884,6 +884,7 @@ function ResultPanel({
           />
         </div>
       )}
+      {job?.status === "done" && job.video && job.script && <ScriptPanel job={job} onRerender={onRetried} />}
       {job?.status === "done" && job.video && (
         <div className="mx-auto mt-4 grid max-w-[320px] grid-cols-2 gap-2">
           <a
@@ -907,6 +908,90 @@ const FORMATS: { key: VideoFormat; emoji: string; label: string; sub: string }[]
   { key: "chef_pov", emoji: "👨‍🍳", label: "Chef POV", sub: "Your hands finishing the order, kitchen sound" },
   { key: "classic", emoji: "🎙", label: "Classic", sub: "Narrated promo ending on your logo" },
 ];
+
+/** What the video says, with an "Edit captions" re-render (reuses the AI clip, so it's free). */
+function ScriptPanel({ job, onRerender }: { job: Job; onRerender: (id: number) => void }) {
+  const s = job.script!;
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="mx-auto mt-4 max-w-[320px] rounded-xl border border-line bg-black/30 text-sm">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex min-h-[44px] w-full items-center justify-between px-4 text-left font-semibold text-cream">
+        What&apos;s in this video <span className="text-muted">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-line px-4 py-3">
+          <div className="font-display text-xl uppercase leading-tight text-cream">{s.hook}</div>
+          <ol className="list-decimal space-y-0.5 pl-5 text-cream/90">
+            {s.beats.map((b, i) => (
+              <li key={i} className="whitespace-pre-line">{b.caption}</li>
+            ))}
+          </ol>
+          {s.voiceover && <p className="text-xs italic text-muted">&ldquo;{s.voiceover}&rdquo;</p>}
+          <Button variant="ghost" className="mt-1 min-h-[40px] w-full" onClick={() => setEditing(true)}>
+            Edit captions
+          </Button>
+        </div>
+      )}
+      {editing && <EditCaptionsDialog job={job} onClose={() => setEditing(false)} onRerender={onRerender} />}
+    </div>
+  );
+}
+
+function EditCaptionsDialog({ job, onClose, onRerender }: { job: Job; onClose: () => void; onRerender: (id: number) => void }) {
+  const s = job.script!;
+  const [hook, setHook] = useState(s.hook);
+  const [beats, setBeats] = useState(s.beats.map((b) => b.caption.replace(/\n/g, " ")));
+  const [voice, setVoice] = useState(s.voiceover);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const toast = useToast();
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api<{ job_id: number }>(`/jobs/${job.id}/edit`, {
+        json: { hook, beats: beats.filter((b) => b.trim()).map((caption) => ({ caption })), ...(s.voiceover ? { voiceover: voice } : {}) },
+      });
+      toast(job.veo_used ? "Re-rendering with your captions. The AI motion is reused, so it's free." : "Re-rendering with your captions.", "ok");
+      onRerender(r.job_id);
+      onClose();
+    } catch (e) {
+      setError(e as ApiError);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal open title="Edit captions" onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Hook · first second" htmlFor="ed-hook">
+          <input id="ed-hook" className={inputCls} value={hook} maxLength={60} onChange={(e) => setHook(e.target.value)} />
+        </Field>
+        {beats.map((b, i) => (
+          <Field key={i} label={`Caption ${i + 1}`} htmlFor={`ed-b${i}`}>
+            <input id={`ed-b${i}`} className={inputCls} value={b} maxLength={60} onChange={(e) => setBeats(beats.map((x, j) => (j === i ? e.target.value : x)))} />
+          </Field>
+        ))}
+        {s.voiceover && (
+          <Field label="Narration" htmlFor="ed-vo" hint="Keep it short: it has to fit in about 5 seconds.">
+            <textarea id="ed-vo" rows={3} className={inputCls} value={voice} maxLength={400} onChange={(e) => setVoice(e.target.value)} />
+          </Field>
+        )}
+        <p className="text-xs text-muted">Prices and claims are checked against your menu, just like the AI&apos;s draft.</p>
+        {error && <ErrorCallout error={error} />}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={save} loading={busy} disabled={!hook.trim() || !beats.some((b) => b.trim())}>
+            Re-render
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 const STEP_LABEL: Record<string, string> = {
   analyze: "Reading your dish",
@@ -966,6 +1051,8 @@ function PostButton({ v, r, ytConfigured, onChanged, full }: { v: Video; r: Rest
 
 function PostDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; onDone: () => void }) {
   const [title, setTitle] = useState(v.title ?? v.dish ?? "");
+  const [description, setDescription] = useState(v.description ?? "");
+  const [tags, setTags] = useState((v.hashtags ?? []).join(" "));
   const [privacy, setPrivacy] = useState<"public" | "unlisted" | "private">("unlisted");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -974,7 +1061,13 @@ function PostDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; onD
     setBusy(true);
     setError(null);
     try {
-      await api(`/videos/${v.id}/publish`, { json: { title, description: v.description ?? "", tags: v.hashtags, privacy } });
+      const tagList = tags
+        .split(/[\s,]+/)
+        .map((t) => t.replace(/^#/, "").trim())
+        .filter(Boolean)
+        .slice(0, 15)
+        .map((t) => `#${t}`);
+      await api(`/videos/${v.id}/publish`, { json: { title, description, tags: tagList, privacy } });
       toast("Posting to YouTube…", "info");
       onDone();
       onClose();
@@ -989,6 +1082,12 @@ function PostDialog({ v, onClose, onDone }: { v: Video; onClose: () => void; onD
       <div className="space-y-4">
         <Field label="Title" htmlFor="yt-title">
           <input id="yt-title" className={inputCls} value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        <Field label="Description" htmlFor="yt-desc">
+          <textarea id="yt-desc" rows={3} className={inputCls} value={description} maxLength={4500} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+        <Field label="Hashtags" htmlFor="yt-tags" hint="Separate with spaces, e.g. #butterchicken #foodie">
+          <input id="yt-tags" className={inputCls} value={tags} maxLength={300} onChange={(e) => setTags(e.target.value)} />
         </Field>
         <div className="grid grid-cols-3 gap-1 rounded-xl bg-bg p-1">
           {(["public", "unlisted", "private"] as const).map((p) => (

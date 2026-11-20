@@ -121,3 +121,30 @@ def test_new_studio_videos_get_the_demo_music(client):
     j = _job(client, "money_shot")  # the test client is a studio, not the template
     assert j["status"] == "done", j
     assert "music" in next(st for st in j["stages"] if st["name"] == "assemble")["note"]
+
+
+def test_editing_captions_keeps_the_style_and_reuses_the_ai_clip(client, monkeypatch):
+    from app.services import veo
+
+    calls = []
+
+    async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
+        calls.append(1)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
+                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", str(out_path)], check=True)
+        return out_path
+
+    monkeypatch.setattr(veo, "generate_clip", fake_clip)
+    j = _job(client, "money_shot", veo=True)
+    assert j["status"] == "done" and j["cost_cents"] == 64 and len(calls) == 1
+    bad = client.post(f"/jobs/{j['id']}/edit", json={"hook": "50% off today", "beats": [{"caption": "chicken biryani"}]}, headers=OWNER)
+    assert bad.status_code == 422 and "menu" in bad.json()["error"]["message"]
+    r = client.post(f"/jobs/{j['id']}/edit", json={"hook": "the pour", "beats": [{"caption": "chicken biryani, always"}]}, headers=OWNER)
+    assert r.status_code == 202
+    j2 = _wait(client, r.json()["job_id"], until=("done", "failed"), timeout=150)
+    assert j2["status"] == "done" and j2["script"]["hook"] == "the pour"
+    assert len(calls) == 1 and j2["cost_cents"] == 0 and j2["veo_used"]  # no second AI video
+    assert next(s for s in j2["stages"] if s["name"] == "visuals")["note"].startswith("AI motion (reused")
+    assert next(s for s in j2["stages"] if s["name"] == "voice")["status"] == "skipped"  # still a money shot
+    assert "kitchen sound" in next(s for s in j2["stages"] if s["name"] == "assemble")["note"]

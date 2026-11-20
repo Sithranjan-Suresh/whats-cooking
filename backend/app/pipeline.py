@@ -383,10 +383,25 @@ def _start_end_card(ctx: Ctx) -> "asyncio.Task[Path]":
     return ctx.card_task
 
 
+def clip_path(job_id: int) -> Path:
+    """Where a job's AI clip is kept, so caption edits can re-render without a new (paid) AI video."""
+    return get_settings().media_dir / "clips" / f"job_{job_id}.mp4"
+
+
 async def _visuals(ctx: Ctx) -> Path:
     jid = ctx.job_id
     main_len = ctx.main_len
     fallback = None
+    src = ctx.flags.get("reuse_clip_of")
+    if src and clip_path(int(src)).exists():
+        try:
+            out = await render.veo_plus_tail(clip_path(int(src)), ctx.photo_path, main_len, ctx.work, style=ctx.style)
+            shutil.copyfile(clip_path(int(src)), clip_path(jid))
+            _update_job(jid, veo_used=True, cost_cents=0)
+            set_stage(jid, "visuals", "done", "AI motion (reused, no extra cost)")
+            return out
+        except FFmpegError as e:
+            log.warning("couldn't reuse clip of job %s: %s", src, e.stderr_tail[-200:])
     if ctx.veo_requested:
         if ctx.flags.get("demo"):
             fallback = "demo_mode"
@@ -411,6 +426,10 @@ async def _visuals(ctx: Ctx) -> Path:
                 else:
                     budget.commit(jid)  # the clip exists, so it was billed
                     _update_job(jid, cost_cents=decision.est_cost_cents, veo_used=True)
+                    try:
+                        shutil.copyfile(clip, clip_path(jid))  # kept for free caption edits
+                    except OSError:
+                        pass
                     try:
                         out = await render.veo_plus_tail(clip, ctx.photo_path, main_len, ctx.work, style=ctx.style)
                         set_stage(jid, "visuals", "done", "AI motion")

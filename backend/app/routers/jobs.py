@@ -8,7 +8,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..auth import Actor, get_actor
@@ -249,13 +249,13 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
 
 
 class BeatEdit(BaseModel):
-    caption: str
+    caption: str = Field(max_length=60)
 
 
 class ScriptEdit(BaseModel):
-    hook: Optional[str] = None
+    hook: Optional[str] = Field(default=None, max_length=60)
     beats: list[BeatEdit]
-    voiceover: Optional[str] = None
+    voiceover: Optional[str] = Field(default=None, max_length=400)
 
 
 @router.post("/jobs/{job_id}/edit", status_code=202)
@@ -266,8 +266,8 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     Edits go through the same grounding validator as AI drafts, so a typo'd price can't ship.
     """
     from ..models import jload
-    from ..services import scripts as sc
-    from ..pipeline import initial_stages as stages0
+    from ..services import formats, scripts as sc
+    from ..pipeline import clip_path, initial_stages as stages0
 
     old = owned(session, Job, job_id, current_restaurant(session), "Job or script not found")
     if not old.script_json:
@@ -288,11 +288,15 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
         script["voiceover"] = body.voiceover.strip()
     script = sc.normalize_script({**script, "facts_used": script.get("facts_used", [])}, old.length_s)
     flags = jload(old.flags_json, {}) or {}
+    fmt = formats.get(flags.get("format"))
+    if not fmt.narrated:
+        script["voiceover"] = ""
     item = session.get(MenuItem, old.menu_item_id) if old.menu_item_id else None
     row = sc.menu_row_for(item) if item else {"name": None, "price": None, "description": None}
-    problems = sc.validate_script(script, row, old.length_s, not_on_menu=bool(flags.get("not_on_menu")) or item is None)
+    problems = sc.validate_script(script, row, old.length_s, not_on_menu=bool(flags.get("not_on_menu")) or item is None,
+                                  narrated=fmt.narrated)
     if problems:
-        raise AppError("not_grounded", "Edit breaks a grounding rule: " + "; ".join(problems), 422)
+        raise AppError("not_grounded", "That edit doesn't match your menu: " + "; ".join(problems), 422)
     script = sc.annotate_beats(script, row)
     script["source"] = "edited"
     stages = stages0()
@@ -300,12 +304,16 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
         if st["name"] in ("analyze", "script"):
             st["status"] = "done"
             st["note"] = "Reused" if st["name"] == "analyze" else "Edited by you · grounding checked"
-    new_flags = {k: v for k, v in flags.items() if k in ("not_on_menu", "continue_anyway")}
+    new_flags = {k: v for k, v in flags.items() if k in ("not_on_menu", "continue_anyway", "format", "director")}
     new_flags["demo"] = actor != "owner"
+    # Re-use the AI clip the first render made: changing words shouldn't cost another AI video.
+    reuse = old.veo_used and clip_path(old.id).exists()
+    if reuse:
+        new_flags["reuse_clip_of"] = old.id
     job = Job(
         restaurant_id=old.restaurant_id, mode=old.mode, menu_item_id=old.menu_item_id,
         photo_asset_id=old.photo_asset_id, insight_id=old.insight_id, angle=old.angle, style=old.style,
-        length_s=old.length_s, veo_requested=old.veo_requested, status="queued", stages_json=jdump(stages),
+        length_s=old.length_s, veo_requested=old.veo_requested and not reuse, status="queued", stages_json=jdump(stages),
         analyze_json=old.analyze_json, script_json=jdump(script), flags_json=jdump(new_flags),
     )
     session.add(job)
