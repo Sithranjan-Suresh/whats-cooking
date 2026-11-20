@@ -100,3 +100,24 @@ def test_silent_ai_clip_falls_back_to_music(client, monkeypatch):
     assert j["status"] == "done", j
     note = next(s for s in j["stages"] if s["name"] == "assemble")["note"]
     assert "kitchen sound" not in note and ("music" in note or "silent" in note)  # test studio has no music asset
+
+
+def test_new_studio_videos_get_the_demo_music(client):
+    """Studios are copies of the demo; its music track is shared (free money shot = music)."""
+    import shutil
+
+    from sqlmodel import Session, select
+
+    from app.config import get_settings
+    from app.db import get_engine, template_restaurant
+    from app.models import Asset
+
+    with Session(get_engine()) as s:
+        tpl = template_restaurant(s)
+        dst = get_settings().media_dir / "assets" / "music_test.mp3"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=10", str(dst)], check=True)
+        s.add(Asset(restaurant_id=tpl.id, kind="music", path=str(dst), mime="audio/mpeg"))
+        s.commit()
+    j = _job(client, "money_shot")  # the test client is a studio, not the template
+    assert j["status"] == "done", j
+    assert "music" in next(st for st in j["stages"] if st["name"] == "assemble")["note"]

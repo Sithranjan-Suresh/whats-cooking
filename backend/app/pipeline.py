@@ -179,6 +179,11 @@ class Ctx:
             logo = s.get(Asset, r.logo_asset_id) if r.logo_asset_id else None
             self.logo_path = Path(logo.path) if logo else None
             music = s.exec(select(Asset).where(Asset.restaurant_id == r.id, Asset.kind == "music")).first()
+            if music is None:  # studios copied from the demo share its music track
+                from .db import template_restaurant
+
+                music = s.exec(select(Asset).where(Asset.restaurant_id == template_restaurant(s).id,
+                                                   Asset.kind == "music")).first()
             self.music_path = Path(music.path) if music else None
             self.menu_item_id = job.menu_item_id
             item = s.get(MenuItem, job.menu_item_id) if job.menu_item_id else None
