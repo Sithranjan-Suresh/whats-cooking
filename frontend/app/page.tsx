@@ -1166,7 +1166,7 @@ function History({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean }) 
       {videos.error && <ErrorCallout error={videos.error} onRetry={() => videos.mutate()} />}
       {videos.data && list.length === 0 && (
         <p className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">
-          Videos you make show up here. Post them to YouTube or download them: after a server restart only the posted ones are kept.
+          Videos you make show up here, ready to download or post to YouTube.
         </p>
       )}
       <ul className="grid gap-3 sm:grid-cols-2">

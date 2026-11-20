@@ -268,6 +268,7 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     from ..models import jload
     from ..services import formats, scripts as sc
     from ..pipeline import clip_path, initial_stages as stages0
+    from ..services import mediastore
 
     old = owned(session, Job, job_id, current_restaurant(session), "Job or script not found")
     if not old.script_json:
@@ -307,9 +308,10 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
     new_flags = {k: v for k, v in flags.items() if k in ("not_on_menu", "continue_anyway", "format", "director")}
     new_flags["demo"] = actor != "owner"
     # Re-use the AI clip the first render made: changing words shouldn't cost another AI video.
-    reuse = old.veo_used and clip_path(old.id).exists()
+    src = int(flags.get("reuse_clip_of") or old.id)  # edits of edits point at the original AI clip
+    reuse = old.veo_used and mediastore.restore(clip_path(src))
     if reuse:
-        new_flags["reuse_clip_of"] = old.id
+        new_flags["reuse_clip_of"] = src
     job = Job(
         restaurant_id=old.restaurant_id, mode=old.mode, menu_item_id=old.menu_item_id,
         photo_asset_id=old.photo_asset_id, insight_id=old.insight_id, angle=old.angle, style=old.style,

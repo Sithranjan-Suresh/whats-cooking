@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     uploads_per_hour_per_ip: int = 40   # photos/logos/CSVs are stored in the DB: keep one visitor from filling it
     photo_max_px: int = 1600            # stored photo size (720p video needs far less; keeps the DB small)
     # Director mode
+    media_db_cap_mb: int = 300  # rendered videos/posters/clips kept in the DB; oldest cleared past this
     director_image_model: str = "gemini-3.1-flash-image"
     director_plans_per_hour_per_ip: int = 60
     director_previews_per_hour_per_ip: int = 10

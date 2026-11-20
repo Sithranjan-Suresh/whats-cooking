@@ -21,8 +21,9 @@ export default function Privacy() {
       <p>
         There are no accounts. The first time you open the site, your browser creates a random studio id and keeps it in its
         local storage; everything you add is filed under that id. Your name, logo, photos, dish details, sales data and video
-        history are stored in our database (Neon Postgres) so they survive server restarts. Generated video files are kept on
-        the video server only until it restarts; anything you posted stays on YouTube.
+        history are stored in our database (Neon Postgres) so they survive server restarts, and so are the videos we make for
+        you (older ones are cleared when storage fills up; anything you posted stays on YouTube). If you sign in with
+        Google, we also store your name, email and profile picture to keep your studio on every device.
       </p>
       <p>
         The studio id isn&apos;t a password: this is a prototype, so don&apos;t upload anything confidential. To have a studio

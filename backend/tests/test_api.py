@@ -416,18 +416,48 @@ def test_media_restored_from_db_after_disk_wipe(client):
     assert path.read_bytes() == original
 
 
-def test_videos_with_lost_files_are_hidden(client):
+def test_videos_survive_a_disk_wipe(client):
+    """Rendered videos are backed up in the DB: after a restart wipes the disk they're restored on first request."""
     from pathlib import Path
+
+    from sqlmodel import Session
+
+    from app.config import get_settings
+    from app.db import get_engine
+    from app.models import MediaBlob
 
     jid = _menu_job(client)
     j = _wait(client, jid, until=("done", "failed"), timeout=90)
     assert j["status"] == "done"
-    vids = client.get("/videos").json()
-    assert any(v["job_id"] == jid for v in vids)
-    from app.config import get_settings
-
-    Path(get_settings().media_dir, j["video"]["url"].split("/media/", 1)[1]).unlink()
+    rel = j["video"]["url"].split("/media/", 1)[1]
+    path = Path(get_settings().media_dir, rel)
+    original = path.read_bytes()
+    path.unlink()  # what a free-host restart does
+    assert any(v["job_id"] == jid for v in client.get("/videos").json())  # still listed
+    r = client.get("/media/" + rel)
+    assert r.status_code == 200 and r.content == original and path.exists()  # restored on first request
+    # truly gone (not on disk, not in the DB): hidden
+    path.unlink()
+    with Session(get_engine()) as s:
+        s.delete(s.get(MediaBlob, rel))
+        s.commit()
     assert not any(v["job_id"] == jid for v in client.get("/videos").json())
+
+
+def test_media_store_cap_clears_clips_first(client, monkeypatch):
+    from app.config import get_settings
+    from app.services import mediastore
+
+    media = get_settings().media_dir
+    for name, kind_dir, size in [("old_video.mp4", "videos", 400_000), ("a_clip.mp4", "clips", 400_000), ("new_video.mp4", "videos", 400_000)]:
+        p = media / kind_dir / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"x" * size)
+        mediastore.keep(p)
+    monkeypatch.setattr(get_settings(), "media_db_cap_mb", 1)  # 1 MB: one of the three must go
+    mediastore.evict()
+    left = mediastore.stored_keys(["videos/old_video.mp4", "clips/a_clip.mp4", "videos/new_video.mp4"])
+    assert left == {"videos/old_video.mp4", "videos/new_video.mp4"}  # the clip went first
 
 
 # ------------------------------------------------------------------ one studio per browser

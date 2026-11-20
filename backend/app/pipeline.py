@@ -20,7 +20,7 @@ from sqlmodel import select
 from .config import get_settings
 from .db import session_scope
 from .models import Asset, Insight, Job, MenuItem, Restaurant, Video, jdump, jload, utcnow
-from .services import formats, budget, gemini, render, scripts, tts, veo
+from .services import formats, mediastore, budget, gemini, render, scripts, tts, veo
 from .services.insights import top_matches
 from .services.media import FFmpegError, probe_video
 from .util import fmt_price
@@ -393,10 +393,9 @@ async def _visuals(ctx: Ctx) -> Path:
     main_len = ctx.main_len
     fallback = None
     src = ctx.flags.get("reuse_clip_of")
-    if src and clip_path(int(src)).exists():
+    if src and await asyncio.to_thread(mediastore.restore, clip_path(int(src))):
         try:
             out = await render.veo_plus_tail(clip_path(int(src)), ctx.photo_path, main_len, ctx.work, style=ctx.style)
-            shutil.copyfile(clip_path(int(src)), clip_path(jid))
             _update_job(jid, veo_used=True, cost_cents=0)
             set_stage(jid, "visuals", "done", "AI motion (reused, no extra cost)")
             return out
@@ -428,6 +427,7 @@ async def _visuals(ctx: Ctx) -> Path:
                     _update_job(jid, cost_cents=decision.est_cost_cents, veo_used=True)
                     try:
                         shutil.copyfile(clip, clip_path(jid))  # kept for free caption edits
+                        await asyncio.to_thread(mediastore.keep, clip_path(jid))
                     except OSError:
                         pass
                     try:
@@ -490,6 +490,7 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
         info = await probe_video(out)
     except FFmpegError as e:
         raise StageFailed("assemble", "Render failed. Retry.") from e
+    await asyncio.to_thread(_keep_media, out, poster)  # backed up before it's reported done
     _finish(ctx, out, poster, info)
     set_stage(jid, "assemble", "done", f"{info['duration_s']:.0f}s · {info['bytes'] / 1e6:.1f} MB")
 
@@ -512,8 +513,16 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
         info = await probe_video(out)
     except FFmpegError as e:
         raise StageFailed("assemble", "Render failed. Retry.") from e
+    await asyncio.to_thread(_keep_media, out, poster)  # backed up before it's reported done
     _finish(ctx, out, poster, info)
     set_stage(jid, "assemble", "done", f"{info['duration_s']:.0f}s loop · {sound} · {info['bytes'] / 1e6:.1f} MB")
+
+
+def _keep_media(out: Path, poster: Optional[Path]) -> None:
+    """Back the finished video up in the database (free host disks are wiped on restart)."""
+    mediastore.keep(out)
+    if poster:
+        mediastore.keep(poster)
 
 
 def _finish(ctx: Ctx, out: Path, poster: Optional[Path], info: dict, *, mode: Optional[str] = None,

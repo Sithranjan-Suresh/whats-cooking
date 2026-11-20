@@ -55,6 +55,16 @@ class AssetBlob(SQLModel, table=True):
     data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
 
 
+class MediaBlob(SQLModel, table=True):
+    """Rendered videos, posters and AI clips, kept in the DB so a host restart (ephemeral disk) doesn't lose them.
+    key = path under the media dir (e.g. "videos/job_7_ab12.mp4"). See services/mediastore.py."""
+    key: str = Field(primary_key=True)
+    kind: str = Field(index=True)  # video|poster|clip
+    size: int = 0
+    data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    created_at: datetime = Field(default_factory=utcnow, index=True)
+
+
 class MenuItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     restaurant_id: int = Field(foreign_key="restaurant.id", index=True)

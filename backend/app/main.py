@@ -73,11 +73,36 @@ class WorkspaceMiddleware:
         return False
 
 
+class MediaRestoreMiddleware:
+    """After a free-host restart, write a missing video/poster/clip back from the database on first request."""
+
+    PREFIXES = ("/media/videos/", "/media/posters/", "/media/clips/")
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "") if scope["type"] == "http" else ""
+        if path.startswith(self.PREFIXES) and ".." not in path:
+            import asyncio
+
+            from .services import mediastore
+
+            local = get_settings().media_dir / path[len("/media/"):]
+            if not local.exists():
+                try:
+                    await asyncio.to_thread(mediastore.restore, local)
+                except Exception:  # noqa: BLE001
+                    logging.getLogger(__name__).exception("media restore failed for %s", path)
+        await self.app(scope, receive, send)
+
+
 def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(title="What's Cooking? API", version="1.0.0", lifespan=lifespan)
     origins = {o.strip().rstrip("/") for o in s.frontend_origin.split(",") if o.strip()}
     origins |= {"http://localhost:3000", "http://127.0.0.1:3000"}
+    app.add_middleware(MediaRestoreMiddleware)
     app.add_middleware(WorkspaceMiddleware)  # inside CORS, so its errors still carry CORS headers
     app.add_middleware(
         CORSMiddleware,

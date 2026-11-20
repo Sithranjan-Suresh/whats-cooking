@@ -30,8 +30,11 @@ router = APIRouter()
 def list_videos(session: Session = Depends(get_session)):
     r = current_restaurant(session)
     rows = session.exec(select(Video).where(Video.restaurant_id == r.id).order_by(Video.created_at.desc())).all()
-    # Video files live on the host's disk; after a free-host restart they're gone (posted ones stay on YouTube).
-    return [video_out(session, v) for v in rows if Path(v.path).exists()]
+    # Files live on the host's disk and are backed up in the DB (mediastore); hide only ones that are truly gone.
+    from ..services import mediastore
+
+    stored = mediastore.stored_keys(mediastore.key_for(Path(v.path)) for v in rows)
+    return [video_out(session, v) for v in rows if Path(v.path).exists() or mediastore.key_for(Path(v.path)) in stored]
 
 
 @router.get("/videos/{video_id}")
@@ -99,6 +102,10 @@ async def publish(video_id: int, body: PublishBody, actor: Actor = Depends(get_a
     if v.publish_status == "publishing":
         raise AppError("already_publishing", "Already posting this one.", 409)
     token = _require_youtube(yt)["rt"]
+    from ..services import mediastore
+
+    if not await asyncio.to_thread(mediastore.restore, Path(v.path)):
+        raise AppError("video_gone", "This video's file is no longer available. Make it again to post it.", 410)
     v.publish_status = "publishing"
     v.publish_error = None
     v.publish_progress = 0
