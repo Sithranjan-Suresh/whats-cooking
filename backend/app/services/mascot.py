@@ -6,7 +6,7 @@ import asyncio
 import io
 import logging
 
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from ..config import get_settings
 from . import gemini
@@ -69,30 +69,37 @@ async def _generate_one(description: str, style: str) -> bytes:
 
 
 def cut_out(png: bytes, size: int = 640) -> bytes:
-    """Make the plain background transparent (flood fill from the edges), trim, and scale to fit `size`."""
+    """Make the plain background transparent, trim, and scale to fit `size`.
+
+    Background = light pixels connected to the image edge. The connectivity flood fill (pure Python in PIL) runs on a
+    160px copy; the crisp edge comes from a full-resolution near-white test. Inner whites (a chef hat, eyes) stay.
+    """
     im = Image.open(io.BytesIO(png)).convert("RGB")
     im.thumbnail((size, size), Image.LANCZOS)
     w, h = im.size
-    marked = im.copy()
+    small = im.resize((max(1, w // 4), max(1, h // 4)), Image.BILINEAR)
+    sw, sh = small.size
     sentinel = (255, 0, 255)
-    for xy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1), (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2)]:
-        px = marked.getpixel(xy)
+    for xy in [(0, 0), (sw - 1, 0), (0, sh - 1), (sw - 1, sh - 1), (sw // 2, 0), (sw // 2, sh - 1), (0, sh // 2), (sw - 1, sh // 2)]:
+        px = small.getpixel(xy)
         if px != sentinel and min(px) > 200:  # light background only
-            ImageDraw.floodfill(marked, xy, sentinel, thresh=48)
-    mask = Image.new("L", (w, h), 255)
-    mpx, kpx = marked.load(), mask.load()
-    for y in range(h):
-        for x in range(w):
-            if mpx[x, y] == sentinel:
-                kpx[x, y] = 0
-    mask = mask.filter(ImageFilter.GaussianBlur(1.2))
+            ImageDraw.floodfill(small, xy, sentinel, thresh=48)
+    r, g, b = small.split()
+    connected = ImageChops.multiply(ImageChops.multiply(r.point(lambda v: 255 if v == 255 else 0),
+                                                        g.point(lambda v: 255 if v == 0 else 0)),
+                                    b.point(lambda v: 255 if v == 255 else 0))
+    # grow it a little so it covers the anti-aliased rim, then back to full size
+    connected = connected.filter(ImageFilter.MaxFilter(3)).resize((w, h), Image.BILINEAR).point(lambda v: 255 if v > 64 else 0)
+    light = im.convert("L").point(lambda v: 255 if v > 205 else 0)
+    is_bg = ImageChops.multiply(connected, light)
+    mask = ImageChops.invert(is_bg).filter(ImageFilter.GaussianBlur(1.2))
     out = im.convert("RGBA")
     out.putalpha(mask)
     bbox = mask.point(lambda v: 255 if v > 20 else 0).getbbox()
     if bbox:
         out = out.crop(bbox)
     buf = io.BytesIO()
-    out.save(buf, "PNG", optimize=True)
+    out.save(buf, "PNG", compress_level=6)  # optimize=True was 80% of the time on a slow CPU
     return buf.getvalue()
 
 
