@@ -29,6 +29,7 @@ class Restaurant(SQLModel, table=True):
     slug: str = Field(index=True, unique=True)
     account_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
     logo_asset_id: Optional[int] = Field(default=None, foreign_key="asset.id")
+    mascot_asset_id: Optional[int] = Field(default=None, foreign_key="asset.id")
     color_primary: str = "#C49A4A"
     color_accent: str = "#F3EBDD"
     voice_tone: str = "upbeat"  # friendly|upbeat|elegant

@@ -140,6 +140,14 @@ Storyboard { hook, beats:[{caption, seconds}], voiceover, shot (one plain senten
 Settings { restaurant_id, daily_veo_clip_limit, monthly_cap_cents, free_mode, veo_cost_per_sec_cents }
 ```
 
+## Mascot
+
+`POST /mascot/options` `{description 3–200}` → `{options:[{option_id, url}×4]}` (original characters only: 422
+`mascot_refused` for existing/copyrighted characters or real people; 4/h per visitor, 15 batches/day total; 503
+`ai_unavailable` without Gemini). `POST /mascot/choose` `{option_id | null}` → `Restaurant` (null removes it).
+`Restaurant.mascot_url`. The mascot bounces in bottom-left on the classic slate; in money_shot/chef_pov the last
+1.8 s is the mascot (centered) above the name line, with captions finishing before it.
+
 ## Formats
 
 | format | narrator | ending | sound |

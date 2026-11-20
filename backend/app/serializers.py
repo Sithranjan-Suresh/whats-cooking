@@ -40,6 +40,7 @@ def restaurant_out(session: Session, r: Restaurant, yt: Optional[dict] = None) -
         "slug": r.slug,
         "logo_asset_id": r.logo_asset_id,
         "logo_url": asset_url(session, r.logo_asset_id),
+        "mascot_url": asset_url(session, r.mascot_asset_id),
         "color_primary": r.color_primary,
         "color_accent": r.color_accent,
         "voice_tone": r.voice_tone,

@@ -208,7 +208,7 @@ def test_veo_success_8s_with_ambient_sound(client, monkeypatch, tmp_path):
 
     async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
-                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-threads", "2", "-pix_fmt", "yuv420p",
                         "-c:a", "aac", str(out_path)], check=True)
         return out_path
 

@@ -42,7 +42,7 @@ def test_chef_pov_with_ai_clip_uses_the_kitchen_sound(client, monkeypatch):
     async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
         assert "first-person" in prompt.lower() or "pov" in prompt.lower()  # the format shaped the AI-motion prompt
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
-                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-threads", "2", "-pix_fmt", "yuv420p",
                         "-c:a", "aac", str(out_path)], check=True)
         return out_path
 
@@ -70,7 +70,7 @@ def _fake_clip_with(monkeypatch, audio_src):
 
     async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
-                        "-f", "lavfi", "-i", audio_src, "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-f", "lavfi", "-i", audio_src, "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-threads", "2", "-pix_fmt", "yuv420p",
                         "-c:a", "aac", str(out_path)], check=True)
         return out_path
 
@@ -131,7 +131,7 @@ def test_editing_captions_keeps_the_style_and_reuses_the_ai_clip(client, monkeyp
     async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
         calls.append(1)
         subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=8",
-                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-f", "lavfi", "-i", "anoisesrc=d=8:a=0.2", "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-threads", "2", "-pix_fmt", "yuv420p",
                         "-c:a", "aac", str(out_path)], check=True)
         return out_path
 

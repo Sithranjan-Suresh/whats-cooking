@@ -68,6 +68,7 @@ def reset_engine() -> None:
 # Lightweight forward-only migrations for columns added after the first deploy: (table, column, DDL).
 MIGRATIONS: list[tuple[str, str, str]] = [
     ("restaurant", "account_id", "INTEGER REFERENCES account(id)"),  # studios owned by a signed-in account
+    ("restaurant", "mascot_asset_id", "INTEGER REFERENCES asset(id)"),  # mascot shown on the video's ending
 ]
 
 
@@ -140,7 +141,8 @@ def template_restaurant(session: Session) -> models.Restaurant:
 
 def _create_workspace(session: Session, tpl: models.Restaurant, slug: str) -> models.Restaurant:
     """A new studio: the template's branding and menu (sharing its photos), no sales, no videos."""
-    r = models.Restaurant(name=tpl.name, slug=slug, logo_asset_id=tpl.logo_asset_id, color_primary=tpl.color_primary,
+    r = models.Restaurant(name=tpl.name, slug=slug, logo_asset_id=tpl.logo_asset_id, mascot_asset_id=tpl.mascot_asset_id,
+                          color_primary=tpl.color_primary,
                           color_accent=tpl.color_accent, voice_tone=tpl.voice_tone, tts_voice=tpl.tts_voice)
     session.add(r)
     try:

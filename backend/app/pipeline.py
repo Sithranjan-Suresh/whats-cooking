@@ -178,6 +178,8 @@ class Ctx:
             }
             logo = s.get(Asset, r.logo_asset_id) if r.logo_asset_id else None
             self.logo_path = Path(logo.path) if logo else None
+            mascot = s.get(Asset, r.mascot_asset_id) if getattr(r, "mascot_asset_id", None) else None
+            self.mascot_path = Path(mascot.path) if mascot else None
             music = s.exec(select(Asset).where(Asset.restaurant_id == r.id, Asset.kind == "music")).first()
             if music is None:  # studios copied from the demo share its music track
                 from .db import template_restaurant
@@ -378,7 +380,7 @@ def _start_end_card(ctx: Ctx) -> "asyncio.Task[Path]":
         dish_name=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("name"),
         price=None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("price"),
         color_primary=ctx.restaurant["color_primary"], color_accent=ctx.restaurant["color_accent"],
-        logo_path=ctx.logo_path,
+        logo_path=ctx.logo_path, mascot_path=ctx.mascot_path,
     ))
     return ctx.card_task
 
@@ -501,14 +503,17 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
     dish = None if ctx.flags.get("not_on_menu") else ctx.menu_row.get("name")
     outro = ctx.restaurant["name"] + (f" · {dish}" if dish else "")
     # captions and the name line finish before the last moment blends back into the first (clean loop)
-    ass = render.build_ass(ctx.script, ctx.main_len - render.LOOP_XFADE, color_primary=ctx.restaurant["color_primary"],
-                           color_accent=ctx.restaurant["color_accent"], style=ctx.fmt.caption_style, outro=outro)
+    end = ctx.main_len - render.LOOP_XFADE
+    has_mascot = bool(ctx.mascot_path and ctx.mascot_path.exists())
+    ass = render.build_ass(ctx.script, end, color_primary=ctx.restaurant["color_primary"],
+                           color_accent=ctx.restaurant["color_accent"], style=ctx.fmt.caption_style, outro=outro,
+                           beats_until=(ctx.main_len - render.MASCOT_MOMENT_S - 0.05) if has_mascot else None)
     media = get_settings().media_dir
     out = media / "videos" / f"job_{jid}_{secrets.token_hex(8)}.mp4"
     try:
         _, sound = await render.assemble_loop_with_retry(work=ctx.work, visuals=visuals, total=ctx.main_len, ass_text=ass,
                                               logo=ctx.logo_path, music=ctx.music_path,
-                                              ambient=ctx.work / "ambient.m4a", out_path=out)
+                                              ambient=ctx.work / "ambient.m4a", out_path=out, mascot=ctx.mascot_path)
         poster = await render.extract_poster(out, media / "posters" / (out.stem + ".jpg"))
         info = await probe_video(out)
     except FFmpegError as e:

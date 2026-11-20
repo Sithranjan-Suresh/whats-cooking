@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # Low-CPU hosts (e.g. Render free): RENDER_PRESET=ultrafast, KB_OVERSAMPLE=1
     render_preset: str = "veryfast"
     kb_oversample: float = 2.0
-    ffmpeg_threads: int = 0      # 0 = ffmpeg's default; 2 keeps a 1080x1920 encode near 100 MB on small hosts
+    ffmpeg_threads: int = 2      # threads per encode; 2 keeps an encode near 100 MB (ffmpeg's default can OOM a 512 MB host)
     ffmpeg_parallel: int = 1     # concurrent ffmpeg processes per server
     workers: int = 2
     demo_jobs_per_hour_per_ip: int = 12
@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     director_plans_per_hour_per_ip: int = 60
     director_previews_per_hour_per_ip: int = 10
     director_previews_per_day: int = 40  # all visitors together (~4¢ each)
+    mascot_batches_per_hour_per_ip: int = 4
+    mascot_batches_per_day: int = 15      # all visitors together (4 images, ~15¢ per batch)
 
     @property
     def media_dir(self) -> Path:

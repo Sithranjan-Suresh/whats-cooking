@@ -373,6 +373,7 @@ function StepLogo({ r, onChange, signedIn, googleReady }: { r: Restaurant; onCha
           </Button>
         </div>
       </div>
+      <MascotMaker r={r} onChange={onChange} />
       {googleReady && !signedIn && (
         <p className="mt-4 text-xs text-muted">
           Saved in this browser.{" "}
@@ -383,6 +384,136 @@ function StepLogo({ r, onChange, signedIn, googleReady }: { r: Restaurant; onCha
         </p>
       )}
     </StepCard>
+  );
+}
+
+const MASCOT_IDEAS = ["a cheerful mango in a chef hat", "a grumpy but lovable dumpling", "a tiny chili pepper with sunglasses"];
+
+function MascotMaker({ r, onChange }: { r: Restaurant; onChange: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [opts, setOpts] = useState<{ option_id: number; url: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState<number | "remove" | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const toast = useToast();
+  const make = async () => {
+    setBusy(true);
+    setError(null);
+    setOpts(null);
+    try {
+      const res = await api<{ options: { option_id: number; url: string }[] }>("/mascot/options", { json: { description: desc.trim() } });
+      setOpts(res.options);
+    } catch (e) {
+      setError(e as ApiError);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const choose = async (id: number | null) => {
+    setSaving(id ?? "remove");
+    try {
+      await api("/mascot/choose", { json: { option_id: id } });
+      onChange();
+      setOpts(null);
+      setOpen(false);
+      toast(id ? "Mascot saved. It joins the ending of your next videos." : "Mascot removed.", "ok");
+    } catch (e) {
+      toast((e as Error).message, "bad");
+    } finally {
+      setSaving(null);
+    }
+  };
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <div className="flex flex-wrap items-center gap-3">
+        {r.mascot_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={r.mascot_url} alt="Your mascot" className="h-16 w-16 rounded-xl bg-[#f6efe4] object-contain p-1" />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-cream">Mascot <span className="font-normal text-muted">(optional)</span></div>
+          <div className="text-xs text-muted">{r.mascot_url ? "Pops in at the end of every video." : "An original character that pops in at the end of your videos."}</div>
+        </div>
+        <Button variant="ghost" className="min-h-[40px]" onClick={() => setOpen(!open)} aria-expanded={open}>
+          {r.mascot_url ? "Change" : "Create one"}
+        </Button>
+        {r.mascot_url && (
+          <Button variant="subtle" className="min-h-[40px]" onClick={() => choose(null)} loading={saving === "remove"}>
+            Remove
+          </Button>
+        )}
+      </div>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (desc.trim().length >= 3) make();
+            }}
+          >
+            <label htmlFor="mascot-desc" className="sr-only">
+              Describe your mascot
+            </label>
+            <input
+              id="mascot-desc"
+              className={cx(inputCls, "min-w-[200px] flex-1")}
+              maxLength={200}
+              value={desc}
+              placeholder="e.g. a cheerful mango in a chef hat"
+              onChange={(e) => setDesc(e.target.value)}
+            />
+            <Button type="submit" loading={busy} disabled={desc.trim().length < 3}>
+              {busy ? "Drawing 4 options…" : "Draw it"}
+            </Button>
+          </form>
+          {!opts && !busy && (
+            <div className="flex flex-wrap gap-2 text-xs">
+              {MASCOT_IDEAS.map((i) => (
+                <button key={i} type="button" onClick={() => setDesc(i)} className="min-h-[34px] rounded-full border border-line px-3 text-cream hover:border-gold/60">
+                  {i}
+                </button>
+              ))}
+            </div>
+          )}
+          {busy && (
+            <div className="grid grid-cols-4 gap-2" aria-hidden>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="aspect-square animate-pulse rounded-xl bg-panel2" />
+              ))}
+            </div>
+          )}
+          {error && <ErrorCallout error={error} />}
+          {opts && (
+            <div>
+              <p className="mb-2 text-xs text-muted">Tap the one you like.</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {opts.map((o) => (
+                  <button
+                    key={o.option_id}
+                    type="button"
+                    onClick={() => choose(o.option_id)}
+                    disabled={saving !== null}
+                    aria-label="Use this mascot"
+                    className="relative grid aspect-square place-items-center rounded-xl bg-[#f6efe4] p-2 ring-1 ring-line transition hover:ring-2 hover:ring-gold disabled:opacity-60"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={o.url} alt="" className="max-h-full max-w-full object-contain" />
+                    {saving === o.option_id && (
+                      <span className="absolute inset-0 grid place-items-center rounded-xl bg-black/50">
+                        <Spinner className="h-5 w-5 text-gold" />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="text-[11px] text-muted">Original characters only: famous or copyrighted ones are turned down.</p>
+        </div>
+      )}
+    </div>
   );
 }
 

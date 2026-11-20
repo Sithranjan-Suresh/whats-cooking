@@ -32,6 +32,8 @@ STYLE_PRESETS = {
 }
 
 LOOP_XFADE = 0.4  # overlay formats: the last moment blends into the first so the Short loops
+MASCOT_LOOP_PX = 300
+MASCOT_MOMENT_S = 1.8  # loop formats: the last moment is the mascot + name (captions finish before it)
 LOOP_LOUDNESS = -16.0  # LUFS target for the food sound (Shorts play back around -14)
 SILENT_LUFS = -60.0    # quieter than this = no real sound: use music rather than boosting hiss
 
@@ -258,6 +260,7 @@ def build_ass(
     style: str = "bold",
     speech: Optional[tuple[float, float]] = None,
     outro: Optional[str] = None,
+    beats_until: Optional[float] = None,
 ) -> str:
     """outro: small 'Restaurant · Dish' line for the last ~1.6s (formats without a logo slate)."""
     p = STYLE_PRESETS.get(style, STYLE_PRESETS["bold"])
@@ -284,7 +287,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = []
     beats = script.get("beats") or []
-    windows = beat_windows(beats, main_len, speech)
+    windows = beat_windows(beats, beats_until or main_len, speech)
     pop = "\\fscx70\\fscy70\\t(0,140,\\fscx104\\fscy104)\\t(140,220,\\fscx100\\fscy100)" if p["pop"] else ""
     for b, (s, e) in zip(beats, windows):
         txt = b["caption"]
@@ -401,6 +404,7 @@ async def animated_end_card(
     color_accent: str,
     logo_path: Optional[Path],
     seconds: float = END_CARD_S + END_XFADE,
+    mascot_path: Optional[Path] = None,
 ) -> Path:
     """Logo reveal on a warm cream backdrop with drifting gold sparkles and a light sweep (≈2.6s).
 
@@ -409,6 +413,7 @@ async def animated_end_card(
     frames_dir = await asyncio.to_thread(
         _paint_end_card, work, restaurant_name=restaurant_name, dish_name=dish_name, price=price,
         color_primary=color_primary, color_accent=color_accent, logo_path=logo_path, seconds=seconds,
+        mascot_path=mascot_path,
     )
     out = work / "endcard.mp4"
     await ffmpeg(
@@ -429,6 +434,7 @@ def _paint_end_card(
     color_accent: str,
     logo_path: Optional[Path],
     seconds: float,
+    mascot_path: Optional[Path] = None,
 ) -> Path:
     import random
 
@@ -506,6 +512,8 @@ def _paint_end_card(
     t = text_layer("ORDER TODAY", _font("inter", 28), (*ink, 200))
     layers.append((t, max(y + 10, H - 230), 1.15))
 
+    mascot = _load_mascot(mascot_path, 250)  # bottom-left corner, clear of the price and "ORDER TODAY"
+
     shine_w = 170
     for i in range(n):
         t = i / CARD_FPS
@@ -547,8 +555,26 @@ def _paint_end_card(
                 im = layer.copy()
                 im.putalpha(im.getchannel("A").point(lambda v, a=a: int(v * a)))
             frame.alpha_composite(im, ((W - layer.width) // 2, int(ly + 18 * (1 - a))))
+        if mascot is not None:  # pops in bottom-left with a little bounce, then bobs
+            k = _ease_out_back((t - 0.3) / 0.5)
+            if k > 0.02:
+                mw, mh = max(1, int(mascot.width * k)), max(1, int(mascot.height * k))
+                m = mascot.resize((mw, mh), Image.LANCZOS)
+                bob = int(6 * math.sin(t * 5))
+                frame.alpha_composite(m, (28 + (mascot.width - mw) // 2, H - 36 - mh + bob))
         frame.convert("RGB").save(frames_dir / f"f{i:04d}.jpg", quality=90)
     return frames_dir
+
+
+def _load_mascot(path: Optional[Path], height: int) -> Optional[Image.Image]:
+    if not path or not Path(path).exists():
+        return None
+    try:
+        m = Image.open(path).convert("RGBA")
+    except Exception:  # noqa: BLE001
+        return None
+    m.thumbnail((height, height), Image.LANCZOS)
+    return m
 
 
 # ------------------------------------------------------------------ assemble
@@ -672,6 +698,7 @@ async def assemble_loop(
     ambient: Optional[Path],
     out_path: Path,
     safe: bool = False,
+    mascot: Optional[Path] = None,
 ) -> tuple[Path, str]:
     """Returns (video, sound used: "kitchen sound" | "music" | "silent"). Formats without a slate: full-length motion, corner logo, captions, and the last LOOP_XFADE seconds blend
     into the first frames so the Short loops. Sound: the AI clip's own audio up front; music only if there is none."""
@@ -683,12 +710,20 @@ async def assemble_loop(
         if lufs is None or lufs < SILENT_LUFS:
             log.info("AI clip sound is silent (%s LUFS): using music", lufs)
             ambient = None
+    m_img = _load_mascot(mascot, MASCOT_LOOP_PX)
+    m_png = None
+    if m_img is not None:
+        m_png = work / "mascot.png"
+        m_img.save(m_png)
     inputs = ["-i", str(visuals)]
     if badge:
         inputs += ["-loop", "1", "-i", str(badge)]
+    m_idx = 1 + int(bool(badge))
+    if m_png:
+        inputs += ["-loop", "1", "-t", f"{total:.3f}", "-i", str(m_png)]
     has_amb = bool(ambient and Path(ambient).exists())
     has_music = bool(music and Path(music).exists()) and not has_amb
-    a_idx = 1 + int(bool(badge))
+    a_idx = 1 + int(bool(badge)) + int(bool(m_png))
     if has_amb:
         inputs += ["-i", str(ambient)]
     elif has_music:
@@ -706,6 +741,11 @@ async def assemble_loop(
         last = "[lg]"
     else:
         last = "[looped]"
+    if m_png:  # the mascot pops in next to the name line for the last moment, gone before the loop blend
+        st = max(total - MASCOT_MOMENT_S, 0.5)
+        vf += (f";[{m_idx}:v]format=rgba,fade=t=in:st={st:.3f}:d=0.25:alpha=1,setpts=PTS-STARTPTS[msc]"
+               f";{last}[msc]overlay=x=(W-w)/2:y=H-h-230:enable='between(t,{st:.3f},{total - x:.3f})':format=auto[withm]")
+        last = "[withm]"
     vf += f";{last}ass=captions.ass:fontsdir=fonts,format=yuv420p[vout]"
     fmt = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
     if has_amb:

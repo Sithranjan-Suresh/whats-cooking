@@ -28,6 +28,7 @@ export interface Restaurant {
   slug: string;
   logo_asset_id: number | null;
   logo_url: string | null;
+  mascot_url?: string | null;
   color_primary: string;
   color_accent: string;
   voice_tone: "friendly" | "upbeat" | "elegant";
