@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { acceptYouTubeConnection, api, fetcher, setYtBlob, startYouTubeConnect, ApiError } from "@/lib/api";
+import { acceptSignIn, acceptYouTubeConnection, api, fetcher, getSession, setYtBlob, signOut, startSignIn, startYouTubeConnect, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
 import type { InsightCard, InsightsResponse, Job, MenuItem, Restaurant, SalesImportResult, Storyboard, Video } from "@/lib/types";
 import { DirectorPanel } from "@/components/director";
@@ -24,20 +24,25 @@ const LAST_JOB = "wc_last_job";
 const SHIPPING = process.env.NEXT_PUBLIC_SHIPPING === "1";
 
 export default function Page() {
+  // Keep a sign-in session from the URL before any request goes out, so the first load is already signed in.
+  const [signin] = useState(() => acceptSignIn());
   return (
     <ThemeProvider>
       <Toaster>
         <div className="grain-layer" aria-hidden />
         <Suspense fallback={null}>
-          <App />
+          <App signin={signin} />
         </Suspense>
       </Toaster>
     </ThemeProvider>
   );
 }
 
-function App() {
+type Me = { account: { id: number; email: string; name: string; picture: string } | null };
+
+function App({ signin }: { signin: "ok" | "rejected" | null }) {
   const params = useSearchParams();
+  const me = useSWR<Me, ApiError>("/auth/me", fetcher);
   const toast = useToast();
   const restaurant = useRestaurant();
   const health = useHealth();
@@ -63,6 +68,9 @@ function App() {
     const hash = window.location.hash;
     const accepted = hash.startsWith("#yt=") && acceptYouTubeConnection(hash);
     if (accepted) restaurant.mutate();
+    if (signin === "ok") toast("Signed in. Your studio now follows you to any device.", "ok");
+    if (signin === "rejected") toast("That sign-in link didn't start in this browser, so it was ignored. Try Sign in again.", "bad");
+    if (params.get("signin") === "error") toast(`Sign-in didn't finish (${params.get("reason") ?? "unknown"}). Try again.`, "bad");
     const yt = params.get("youtube");
     if (yt === "connected")
       toast(
@@ -80,7 +88,7 @@ function App() {
         "bad",
       );
     }
-    if (yt || hash) window.history.replaceState(null, "", "/");
+    if (yt || hash || params.get("signin")) window.history.replaceState(null, "", "/");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -94,6 +102,10 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (me.data && !me.data.account && getSession()) signOut(); // the server no longer accepts it
+  }, [me.data]);
+
   const loading = !restaurant.data && !restaurant.error;
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-20 pt-6 sm:px-6 sm:pt-10">
@@ -105,7 +117,7 @@ function App() {
           </span>
         </div>
       )}
-      <Header />
+      <Header me={me.data} googleReady={!!(restaurant.data?.youtube_configured ?? health.data?.youtube_configured)} />
       {restaurant.error && (
         <div className="mt-6">
           <ErrorCallout
@@ -124,7 +136,7 @@ function App() {
         <>
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0 space-y-6">
-              <StepLogo r={restaurant.data} onChange={() => restaurant.mutate()} />
+              <StepLogo r={restaurant.data} onChange={() => restaurant.mutate()} signedIn={!!me.data?.account} googleReady={!!restaurant.data.youtube_configured} />
               <StepDish onStarted={track} busy={busy} onPreview={setPreview} />
               <StepYouTube r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
@@ -150,10 +162,11 @@ function App() {
   );
 }
 
-function Header() {
+function Header({ me, googleReady }: { me?: Me; googleReady: boolean }) {
   const { sound, setSound } = useTheme();
   return (
     <header className="relative pt-12 text-center sm:pt-0">
+      {googleReady && <AccountButton me={me} />}
       <button
         type="button"
         onClick={() => setSound(!sound)}
@@ -175,6 +188,86 @@ function Header() {
   );
 }
 
+function AccountButton({ me }: { me?: Me }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  if (!me) return null;
+  const a = me.account;
+  if (!a)
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await startSignIn();
+          } catch (e) {
+            toast((e as Error).message, "bad");
+            setBusy(false);
+          }
+        }}
+        className="absolute left-0 top-0 inline-flex min-h-[40px] items-center gap-2 rounded-full border border-line bg-black/40 px-3 text-sm font-semibold text-cream transition hover:border-gold/60 disabled:opacity-50"
+      >
+        {busy ? <Spinner className="h-4 w-4" /> : <GoogleG />} Sign in
+      </button>
+    );
+  const first = (a.name || a.email).split(" ")[0];
+  return (
+    <div ref={ref} className="absolute left-0 top-0 z-30 text-left">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="inline-flex min-h-[40px] items-center gap-2 rounded-full border border-line bg-black/40 py-1 pl-1 pr-3 text-sm font-semibold text-cream hover:border-gold/60"
+      >
+        {a.picture ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={a.picture} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full" />
+        ) : (
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-gold font-display text-lg text-ongold">{first[0]?.toUpperCase()}</span>
+        )}
+        {first}
+      </button>
+      {open && (
+        <div role="menu" className="mt-2 w-64 animate-fadeup rounded-xl border border-line bg-panel p-3 shadow-2xl">
+          <div className="truncate text-sm font-semibold text-cream">{a.name || first}</div>
+          <div className="truncate text-xs text-muted">{a.email}</div>
+          <p className="mt-2 text-xs text-muted">Your studio, logo and videos are saved to this account.</p>
+          <Button role="menuitem" variant="ghost" className="mt-3 w-full min-h-[40px]" onClick={() => signOut()}>
+            Sign out
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GoogleG() {
+  return (
+    <svg viewBox="0 0 48 48" className="h-4 w-4" aria-hidden>
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
+  );
+}
+
 function StepCard({ n, title, done, children }: { n: number; title: string; done?: boolean; children: React.ReactNode }) {
   return (
     <section className="card rounded-xl border p-5 sm:p-6">
@@ -191,7 +284,7 @@ function StepCard({ n, title, done, children }: { n: number; title: string; done
 
 // ---------------------------------------------------------------- 1. logo
 
-function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
+function StepLogo({ r, onChange, signedIn, googleReady }: { r: Restaurant; onChange: () => void; signedIn: boolean; googleReady: boolean }) {
   const toast = useToast();
   const [name, setName] = useState(r.name);
   const [busy, setBusy] = useState(false);
@@ -280,6 +373,15 @@ function StepLogo({ r, onChange }: { r: Restaurant; onChange: () => void }) {
           </Button>
         </div>
       </div>
+      {googleReady && !signedIn && (
+        <p className="mt-4 text-xs text-muted">
+          Saved in this browser.{" "}
+          <button type="button" onClick={() => startSignIn().catch(() => {})} className="font-semibold text-gold underline-offset-4 hover:underline">
+            Sign in with Google
+          </button>{" "}
+          to use it on your phone and laptop too.
+        </p>
+      )}
     </StepCard>
   );
 }

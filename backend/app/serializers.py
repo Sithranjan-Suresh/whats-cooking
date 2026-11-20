@@ -28,10 +28,10 @@ def restaurant_out(session: Session, r: Restaurant, yt: Optional[dict] = None) -
     has_sales = session.exec(select(SalesRecord.id).where(SalesRecord.restaurant_id == r.id).limit(1)).first() is not None
     # A new studio starts with the demo's name and logo; flag it so the page can ask for the real ones
     # (otherwise the first videos end on someone else's branding).
-    from .db import WS_PREFIX, template_restaurant
+    from .db import is_studio, template_restaurant
 
     demo_name = demo_logo = False
-    if r.slug.startswith(WS_PREFIX):
+    if is_studio(r.slug):
         tpl = template_restaurant(session)
         demo_name, demo_logo = r.name == tpl.name, r.logo_asset_id == tpl.logo_asset_id
     return {

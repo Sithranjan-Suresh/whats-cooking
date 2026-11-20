@@ -11,10 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import ensure_dirs, get_settings
-from .db import WORKSPACE_RE, init_db, restore_media, workspace_var
+from .accounts import decode_session
+from .db import WORKSPACE_RE, account_var, init_db, restore_media, workspace_var
 from .errors import install_error_handlers
 from .pipeline import job_queue
-from .routers import core, director, insights, jobs, videos
+from .routers import auth, core, director, insights, jobs, videos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -47,18 +48,20 @@ class WorkspaceMiddleware:
         headers = {k.decode().lower(): v.decode(errors="replace") for k, v in scope["headers"]}
         ws = headers.get("x-workspace", "").strip().lower()
         ws = ws if WORKSPACE_RE.match(ws) else None
-        if ws is None and scope["method"] in self.WRITE and not self._privileged(headers):
+        acct = decode_session(headers.get("x-session"))  # signed in: the account's studio
+        if ws is None and acct is None and scope["method"] in self.WRITE and not self._privileged(headers):
             body = json.dumps({"error": {"code": "workspace_required", "retryable": False,
                                          "message": "Refresh the page and try again (missing studio id)."}}).encode()
             await send({"type": "http.response.start", "status": 400,
                         "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
             await send({"type": "http.response.body", "body": body})
             return
-        token = workspace_var.set(ws)
+        token, atoken = workspace_var.set(ws), account_var.set(acct)
         try:
             await self.app(scope, receive, send)
         finally:
             workspace_var.reset(token)
+            account_var.reset(atoken)
 
     @staticmethod
     def _privileged(headers: dict) -> bool:
@@ -84,7 +87,7 @@ def create_app() -> FastAPI:
     )
     install_error_handlers(app)
 
-    for r in (core.router, director.router, insights.router, jobs.router, videos.router):
+    for r in (auth.router, core.router, director.router, insights.router, jobs.router, videos.router):
         app.include_router(r)
     ensure_dirs()
     app.mount("/media", StaticFiles(directory=str(s.media_dir)), name="media")

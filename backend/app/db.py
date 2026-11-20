@@ -66,7 +66,9 @@ def reset_engine() -> None:
 
 
 # Lightweight forward-only migrations for columns added after the first deploy: (table, column, DDL).
-MIGRATIONS: list[tuple[str, str, str]] = []
+MIGRATIONS: list[tuple[str, str, str]] = [
+    ("restaurant", "account_id", "INTEGER REFERENCES account(id)"),  # studios owned by a signed-in account
+]
 
 
 def init_db() -> None:
@@ -92,6 +94,7 @@ def _create_schema(eng) -> None:
             "CREATE INDEX IF NOT EXISTS ix_ledger_rest_date_state ON usageledger(restaurant_id, date, state)",
             "CREATE INDEX IF NOT EXISTS ix_video_rest_created ON video(restaurant_id, created_at)",
             "CREATE INDEX IF NOT EXISTS ix_menu_rest_norm ON menuitem(restaurant_id, name_norm)",
+            "CREATE INDEX IF NOT EXISTS ix_restaurant_account ON restaurant(account_id)",
         ):
             conn.execute(text(stmt))
 
@@ -114,13 +117,21 @@ def session_scope() -> Iterator[Session]:
 # workspace see the template read-only (writes need an owner/admin token, enforced in main.WorkspaceMiddleware).
 
 workspace_var: "contextvars.ContextVar[Optional[str]]" = contextvars.ContextVar("workspace", default=None)
+account_var: "contextvars.ContextVar[Optional[int]]" = contextvars.ContextVar("account", default=None)
 WORKSPACE_RE = re.compile(r"^[0-9a-f]{32}$")
-WS_PREFIX = "ws-"
+WS_PREFIX = "ws-"      # guest studio, keyed by the browser's id
+ACCT_PREFIX = "acct-"  # studio owned by a signed-in account
+
+
+def is_studio(slug: str) -> bool:
+    return slug.startswith(WS_PREFIX) or slug.startswith(ACCT_PREFIX)
 
 
 def template_restaurant(session: Session) -> models.Restaurant:
     r = session.exec(
-        select(models.Restaurant).where(~models.Restaurant.slug.startswith(WS_PREFIX)).order_by(models.Restaurant.id)
+        select(models.Restaurant)
+        .where(~models.Restaurant.slug.startswith(WS_PREFIX), ~models.Restaurant.slug.startswith(ACCT_PREFIX))
+        .order_by(models.Restaurant.id)
     ).first()
     if r is None:
         raise AppError("not_seeded", "No restaurant yet. Run `make seed`.", 409)
@@ -145,8 +156,39 @@ def _create_workspace(session: Session, tpl: models.Restaurant, slug: str) -> mo
     return r
 
 
+def _account_restaurant(session: Session, tpl: models.Restaurant, account_id: int) -> models.Restaurant:
+    """The signed-in account's studio. First sign-in claims this browser's guest studio (so nothing is lost);
+    otherwise a fresh copy of the demo. Claimed studios get a new slug, so the browser id no longer opens them."""
+    r = session.exec(select(models.Restaurant).where(models.Restaurant.account_id == account_id)
+                     .order_by(models.Restaurant.id)).first()
+    if r:
+        return r
+    ws = workspace_var.get()
+    guest = session.exec(select(models.Restaurant).where(models.Restaurant.slug == WS_PREFIX + ws)).first() if ws else None
+    if guest is not None and guest.account_id is None:
+        guest.account_id, guest.slug = account_id, f"{ACCT_PREFIX}{account_id}"
+        session.add(guest)
+        try:
+            session.commit()
+        except IntegrityError:  # a parallel request claimed it first
+            session.rollback()
+            return _account_restaurant(session, tpl, account_id)
+        session.refresh(guest)
+        return guest
+    r = _create_workspace(session, tpl, f"{ACCT_PREFIX}{account_id}")
+    if r.account_id is None:
+        r.account_id = account_id
+        session.add(r)
+        session.commit()
+        session.refresh(r)
+    return r
+
+
 def current_restaurant(session: Session) -> models.Restaurant:
     tpl = template_restaurant(session)
+    acct = account_var.get()
+    if acct:
+        return _account_restaurant(session, tpl, acct)
     ws = workspace_var.get()
     if not ws:
         return tpl

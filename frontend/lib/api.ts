@@ -88,8 +88,73 @@ function newWorkspaceId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// ---------------------------------------------------------------- Google sign-in
+// Signed in, the server uses the account's studio (same on every device). The session is an encrypted token the
+// server issued; the browser keeps it and sends it as X-Session. Signing out = forgetting it.
+const SESSION_KEY = "wc_session";
+const SIGNIN_NONCE_KEY = "wc_signin_nonce";
+
+export function getSession(): string | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function startSignIn(): Promise<void> {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  try {
+    window.localStorage.setItem(SIGNIN_NONCE_KEY, nonce);
+  } catch {
+    /* ignore */
+  }
+  const { url } = await api<{ url: string }>(`/auth/google/url?nonce=${nonce}`);
+  window.location.href = url;
+}
+
+/** Called before the first API request on page load: keep a session from the URL fragment if this browser asked for it. */
+export function acceptSignIn(): "ok" | "rejected" | null {
+  if (typeof window === "undefined" || !window.location.hash.startsWith("#session=")) return null;
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("session");
+  const nonce = params.get("n");
+  let expected: string | null = null;
+  try {
+    expected = window.localStorage.getItem(SIGNIN_NONCE_KEY);
+    window.localStorage.removeItem(SIGNIN_NONCE_KEY);
+  } catch {
+    /* ignore */
+  }
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  if (!token || !nonce || nonce !== expected) return "rejected";
+  try {
+    window.localStorage.setItem(SESSION_KEY, token);
+  } catch {
+    return "rejected";
+  }
+  return "ok";
+}
+
+/** Sign out: forget the session and start a fresh guest studio in this browser (shared computers). */
+export function signOut() {
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+    window.localStorage.removeItem(WS_KEY);
+    window.localStorage.removeItem("wc_last_job");
+  } catch {
+    /* ignore */
+  }
+  memoryWorkspace = null;
+  window.location.href = "/";
+}
+
 export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
   const headers: Record<string, string> = { "X-Workspace": getWorkspace() };
+  const session = getSession();
+  if (session) headers["X-Session"] = session;
   const token = getOwnerToken();
   if (token) headers["X-Owner-Token"] = token;
   const yt = getYtBlob();

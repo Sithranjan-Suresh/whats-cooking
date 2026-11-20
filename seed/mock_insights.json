@@ -1,5 +1,5 @@
 {
- "batch_id": "552aa6865177",
+ "batch_id": "15165da8b29f",
  "cards": [
   {
    "id": 2,
@@ -8,7 +8,7 @@
     "id": 1,
     "name": "Chicken Biryani",
     "price": "$14.99",
-    "photo_url": "http://127.0.0.1:8128/media/assets/seed_photo_chicken-biryani.jpg"
+    "photo_url": "http://127.0.0.1:8130/media/assets/seed_photo_chicken-biryani.jpg"
    },
    "metric": {
     "qty_7d": 83,
@@ -26,7 +26,7 @@
     "id": 2,
     "name": "Butter Chicken",
     "price": "$15.99",
-    "photo_url": "http://127.0.0.1:8128/media/assets/seed_photo_butter-chicken.jpg"
+    "photo_url": "http://127.0.0.1:8130/media/assets/seed_photo_butter-chicken.jpg"
    },
    "metric": {
     "qty_7d": 112,
@@ -43,7 +43,7 @@
     "id": 7,
     "name": "Malai Kofta",
     "price": "$13.99",
-    "photo_url": "http://127.0.0.1:8128/media/assets/seed_photo_malai-kofta.jpg"
+    "photo_url": "http://127.0.0.1:8130/media/assets/seed_photo_malai-kofta.jpg"
    },
    "metric": {
     "qty_7d": 5,

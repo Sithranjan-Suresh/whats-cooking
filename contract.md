@@ -25,6 +25,15 @@ from the seeded demo template on first use; the template's dish photos are share
 the template, and writes get 400 `workspace_required` unless they carry a valid owner or admin token.
 The AI budget (`/usage`, `/settings`, ledger) is one pot shared by all studios.
 
+## Sign-in (Google, optional)
+
+`GET /auth/google/url?nonce=` → `{url}` (scopes openid/email/profile; shares the YouTube redirect URI, the signed
+state says which flow). The callback redirects to `/?signin=ok#session=<encrypted token>&n=<nonce>`; the browser
+keeps the session only if `n` matches its own nonce, then sends it as `X-Session` (90 days). `GET /auth/me` →
+`{account: {id, email, name, picture} | null}`. Signed in, every request uses the account's studio (first sign-in
+claims this browser's guest studio; same studio on every device). Signing out = the browser forgets the session
+and starts a new guest studio. Errors redirect to `/?signin=error&reason=…`.
+
 ## Auth
 
 | Request | Actor |

@@ -12,10 +12,22 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+class Account(SQLModel, table=True):
+    """A signed-in person (Google sign-in). Guests have no account; their studio is keyed by the browser."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    google_sub: str = Field(index=True, unique=True)
+    email: str = ""
+    name: str = ""
+    picture: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+    last_login_at: datetime = Field(default_factory=utcnow)
+
+
 class Restaurant(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     slug: str = Field(index=True, unique=True)
+    account_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
     logo_asset_id: Optional[int] = Field(default=None, foreign_key="asset.id")
     color_primary: str = "#C49A4A"
     color_accent: str = "#F3EBDD"

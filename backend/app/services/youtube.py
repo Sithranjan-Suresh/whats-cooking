@@ -17,6 +17,12 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
 ]
+# Google sign-in (login) asks only for basic profile: no sensitive scopes, so no "unverified app" screen.
+LOGIN_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 TOKEN_URI = "https://oauth2.googleapis.com/token"
 # Added to every description we post, so "On YouTube" lists only videos made with this app.
 APP_MARKER = "Made with What's Cooking? #WhatsCookingApp"
@@ -65,11 +71,16 @@ def _verify(state: str) -> dict:
     return payload
 
 
-def _flow(state: Optional[str] = None):
+def state_purpose(state: str) -> str:
+    """'login' for Google sign-in, 'youtube' for channel connections (both share one redirect URI)."""
+    return _verify(state).get("p", "youtube")
+
+
+def _flow(state: Optional[str] = None, scopes: Optional[list[str]] = None):
     from google_auth_oauthlib.flow import Flow
 
     s = get_settings()
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES, state=state, autogenerate_code_verifier=False)
+    flow = Flow.from_client_config(_client_config(), scopes=scopes or SCOPES, state=state, autogenerate_code_verifier=False)
     flow.redirect_uri = s.oauth_redirect_uri
     return flow
 
@@ -82,6 +93,37 @@ def auth_url(restaurant_id: int, nonce: str) -> str:
     state = _sign({"r": restaurant_id, "t": int(time.time()), "n": nonce})
     url, _ = _flow(state).authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
     return url
+
+
+def login_url(nonce: str) -> str:
+    if not get_settings().youtube_enabled:
+        raise YouTubeError("google_not_configured", "Google sign-in is not configured on the server.")
+    state = _sign({"p": "login", "t": int(time.time()), "n": nonce})
+    url, _ = _flow(state, LOGIN_SCOPES).authorization_url(access_type="online", prompt="select_account")
+    return url
+
+
+def exchange_login(code: str, state: str) -> dict:
+    """Finish Google sign-in: returns {sub, email, name, picture, nonce} from a verified ID token."""
+    import os
+
+    from google.auth.transport import requests as grequests
+    from google.oauth2 import id_token
+
+    payload = _verify(state)
+    if payload.get("p") != "login":
+        raise YouTubeError("bad_state", "Invalid sign-in state")
+    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")  # Google may echo scopes in another order
+    flow = _flow(state, LOGIN_SCOPES)
+    flow.fetch_token(code=code)
+    raw = getattr(flow.credentials, "id_token", None)
+    if not raw:
+        raise YouTubeError("no_id_token", "Google didn't return an identity. Try signing in again.")
+    claims = id_token.verify_oauth2_token(raw, grequests.Request(), get_settings().google_oauth_client_id)
+    if not claims.get("sub"):
+        raise YouTubeError("no_id_token", "Google didn't return an identity. Try signing in again.")
+    return {"sub": claims["sub"], "email": claims.get("email", ""), "name": claims.get("name", ""),
+            "picture": claims.get("picture", ""), "nonce": payload.get("n") or ""}
 
 
 def exchange_code(code: str, state: str) -> dict:

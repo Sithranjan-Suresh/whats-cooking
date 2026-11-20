@@ -130,7 +130,11 @@ def yt_auth_url(nonce: str = Query(min_length=16, max_length=64, pattern=r"^[A-Z
 def yt_callback(code: str | None = None, state: str | None = None, error: str | None = None):
     front = get_settings().frontend_origin.split(",")[0].strip().rstrip("/")
     if error or not code or not state:
-        return RedirectResponse(f"{front}/?youtube=error&reason={error or 'missing_code'}", status_code=302)
+        purpose = _purpose(state)
+        kind = "signin" if purpose == "login" else "youtube"
+        return RedirectResponse(f"{front}/?{kind}=error&reason={error or 'missing_code'}", status_code=302)
+    if _purpose(state) == "login":  # Google sign-in shares this redirect URI
+        return _finish_login(code, state, front)
     try:
         info = youtube.exchange_code(code, state)
     except youtube.YouTubeError as e:
@@ -142,6 +146,41 @@ def yt_callback(code: str | None = None, state: str | None = None, error: str | 
     blob = encode_connection(info["refresh_token"], info["channel_id"], info["channel_title"])
     # n= echoes the browser's nonce: the page keeps the connection only if it matches the one it started with.
     return RedirectResponse(f"{front}/?youtube=connected#yt={quote(blob)}&n={quote(info.get('nonce') or '')}",
+                            status_code=302)
+
+
+def _purpose(state: Optional[str]) -> str:
+    if not state:
+        return "youtube"
+    try:
+        return youtube.state_purpose(state)
+    except youtube.YouTubeError:
+        return "youtube"
+
+
+def _finish_login(code: str, state: str, front: str) -> RedirectResponse:
+    """Google sign-in: upsert the account, hand the browser an encrypted session (URL fragment) + its nonce."""
+    from ..accounts import encode_session
+    from ..models import Account, utcnow
+
+    try:
+        info = youtube.exchange_login(code, state)
+    except youtube.YouTubeError as e:
+        return RedirectResponse(f"{front}/?signin=error&reason={e.code}", status_code=302)
+    except Exception:  # noqa: BLE001
+        log.exception("sign-in exchange failed")
+        return RedirectResponse(f"{front}/?signin=error&reason=exchange_failed", status_code=302)
+    with session_scope() as s:
+        acct = s.exec(select(Account).where(Account.google_sub == info["sub"])).first()
+        if acct is None:
+            acct = Account(google_sub=info["sub"])
+        acct.email, acct.name, acct.picture = info["email"], info["name"], info["picture"]
+        acct.last_login_at = utcnow()
+        s.add(acct)
+        s.commit()
+        s.refresh(acct)
+        token = encode_session(acct.id)
+    return RedirectResponse(f"{front}/?signin=ok#session={quote(token)}&n={quote(info.get('nonce') or '')}",
                             status_code=302)
 
 
