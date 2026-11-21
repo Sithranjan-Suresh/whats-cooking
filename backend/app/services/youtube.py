@@ -103,6 +103,22 @@ def auth_url(restaurant_id: int, nonce: str) -> str:
     return url
 
 
+def revoke(refresh_token: str) -> bool:
+    """Ask Google to revoke a token (best effort; never raises)."""
+    import urllib.parse
+    import urllib.request
+
+    try:
+        req = urllib.request.Request("https://oauth2.googleapis.com/revoke",
+                                     data=urllib.parse.urlencode({"token": refresh_token}).encode(),
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+        urllib.request.urlopen(req, timeout=10)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.info("token revoke failed: %s", e)
+        return False
+
+
 def login_url(nonce: str) -> str:
     if not get_settings().youtube_enabled:
         raise YouTubeError("google_not_configured", "Google sign-in is not configured on the server.")

@@ -7,7 +7,7 @@ Solo project. Live: https://whatscookinghq.vercel.app (Vercel) + Render free (AP
 - `backend/` FastAPI + SQLModel (Postgres via `DATABASE_URL`, e.g. Neon; else SQLite at `$DATA_DIR/app.db`; uploaded asset bytes also kept in `assetblob` and restored on boot) + in-process asyncio job queue + ffmpeg.
   - `app/pipeline.py` stage machine (analyze → script → visuals → voice → assemble), mock + demo-cache runners
   - `app/services/` gemini (Gemini 3.5 Flash), scripts (grounding validator + template fallback), veo (AI motion: Gemini Omni via Interactions API; legacy veo-* ids), budget (AI-motion guard), tts, render, insights, youtube
-  - `app/viewer.py` per-visitor YouTube connection (encrypted blob in the browser, sent as `X-YouTube-Auth`; never stored server-side)
+  - `app/viewer.py` YouTube connection: signed-in accounts keep it encrypted on `Account.youtube_conn` (linked via `POST /youtube/claim` from the browser that started the connect); guests keep an encrypted blob in the browser (`X-YouTube-Auth`, 90 days)
   - `app/routers/` core (health, brand, menu, uploads, usage, settings), insights, jobs, videos (+ YouTube OAuth)
 - `frontend/` Next.js 15 App Router + Tailwind 3 + SWR. One page (`app/page.tsx`): logo → dish (sales CSV pick or photo) → Action! → Post to YouTube, plus "Your videos" history. Hollywood theme in `lib/theme.tsx` + `app/globals.css`.
 - `seed/` Kumar's demo data (`build_assets.py` generates sales/music/placeholders; `seed.py` loads the DB).

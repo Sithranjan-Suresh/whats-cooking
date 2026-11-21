@@ -138,6 +138,15 @@ export function acceptSignIn(): "ok" | "rejected" | null {
   return "ok";
 }
 
+/** Signed in: move this browser's YouTube connection to the account (then the browser forgets it). */
+export async function saveYouTubeToAccount(): Promise<string | null> {
+  const blob = getYtBlob();
+  if (!blob || !getSession()) return null;
+  const r = await api<{ ok: boolean; channel_title: string | null }>("/youtube/claim", { json: { connection: blob } });
+  setYtBlob(null);
+  return r.channel_title;
+}
+
 /** Sign out: forget the session and start a fresh guest studio in this browser (shared computers). */
 export function signOut() {
   try {

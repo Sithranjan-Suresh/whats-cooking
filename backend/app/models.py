@@ -21,6 +21,7 @@ class Account(SQLModel, table=True):
     picture: str = ""
     created_at: datetime = Field(default_factory=utcnow)
     last_login_at: datetime = Field(default_factory=utcnow)
+    youtube_conn: Optional[str] = None  # encrypted YouTube connection (Fernet, APP_SECRET); None = not linked
 
 
 class Restaurant(SQLModel, table=True):

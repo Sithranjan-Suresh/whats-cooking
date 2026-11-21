@@ -213,7 +213,45 @@ async def yt_uploads(yt: Optional[dict] = Depends(viewer_youtube), session: Sess
         raise AppError("youtube_error", "Couldn't load your YouTube videos right now.", 502, retryable=True) from e
 
 
+class Claim(BaseModel):
+    connection: str = Field(min_length=20, max_length=4000)
+
+
+@router.post("/youtube/claim")
+def yt_claim(body: Claim, session: Session = Depends(get_session)):
+    """Signed in: save a connection this browser holds (fresh from connect, or from before signing in) to the account."""
+    from ..db import account_var
+    from ..models import Account
+    from ..viewer import decode_connection, encode_connection
+
+    acct_id = account_var.get()
+    if not acct_id:
+        raise AppError("signin_required", "Sign in to save YouTube to your account.", 401)
+    data = decode_connection(body.connection)
+    if data is None:
+        raise AppError("youtube_reconnect_required", "That YouTube connection expired. Connect again.", 400)
+    acct = session.get(Account, acct_id)
+    if acct is None:
+        raise AppError("signin_required", "Sign in again.", 401)
+    acct.youtube_conn = encode_connection(data["rt"], data.get("cid"), data.get("ct"))
+    session.add(acct)
+    session.commit()
+    return {"ok": True, "channel_title": data.get("ct")}
+
+
 @router.post("/youtube/disconnect")
-def yt_disconnect():
-    """Nothing is stored server-side; the browser forgets its own connection."""
+def yt_disconnect(yt: Optional[dict] = Depends(viewer_youtube), session: Session = Depends(get_session)):
+    """Revoke the connection at Google and forget it (account copy deleted; the browser drops its own copy)."""
+    from ..db import account_var
+    from ..models import Account
+
+    if yt:
+        youtube.revoke(yt["rt"])  # best effort: the token stops working even if someone copied it
+    acct_id = account_var.get()
+    if acct_id:
+        acct = session.get(Account, acct_id)
+        if acct and acct.youtube_conn:
+            acct.youtube_conn = None
+            session.add(acct)
+            session.commit()
     return {"ok": True}

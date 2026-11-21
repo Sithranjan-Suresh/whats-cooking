@@ -53,9 +53,11 @@ export default function Privacy() {
         </li>
       </ul>
       <p>
-        Your YouTube access token is encrypted and stored <b>only in your own browser</b>. Our server doesn&apos;t keep it, and we never
-        share, sell or use your Google data for anything else. You can disconnect in the app at any time, and revoke access
-        entirely at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+        Your YouTube access token is always encrypted. If you use the app without signing in, it&apos;s stored <b>only in your
+        own browser</b>. If you&apos;re signed in, it&apos;s saved (encrypted) to your account on our server so it works on all your
+        devices. We never share, sell or use your Google data for anything else. <b>Disconnect</b> in the app revokes the access
+        at Google and deletes it from our server; you can also revoke it any time at{" "}
+        <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
       </p>
       <p>
         What&apos;s Cooking?&apos;s use and transfer of information received from Google APIs adheres to the{" "}
@@ -65,7 +67,7 @@ export default function Privacy() {
       </p>
 
       <h2>Cookies and tracking</h2>
-      <p>No analytics, ads or tracking cookies. Your browser&apos;s local storage holds your studio id, your YouTube connection and a sound on/off setting.</p>
+      <p>No analytics, ads or tracking cookies. Your browser&apos;s local storage holds your studio id, your sign-in session, your YouTube connection if you aren&apos;t signed in, and a sound on/off setting.</p>
 
       <h2>Contact</h2>
       <p>

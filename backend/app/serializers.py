@@ -50,6 +50,7 @@ def restaurant_out(session: Session, r: Restaurant, yt: Optional[dict] = None) -
         "youtube_connected": yt is not None,
         "youtube_configured": get_settings().youtube_enabled,
         "youtube_channel_title": yt.get("ct") if yt else None,
+        "youtube_saved_to": (yt.get("source") or "browser") if yt else None,  # "account" | "browser"
         "demo_name": demo_name,
         "demo_logo": demo_logo,
     }

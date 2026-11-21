@@ -53,6 +53,12 @@ The frontend stores the owner token in `localStorage` after a one-time unlock.
 and `JOBS_PER_HOUR_PER_IP` (6) per visitor IP, and refuses when `MAX_QUEUED_JOBS` (4) are already queued/running →
 429 `rate_limited` with a human message. A valid `X-Owner-Token` skips these.
 
+**YouTube for signed-in accounts** is saved (encrypted) to the account: after connecting, or after signing in with a
+connection already in the browser, the page calls `POST /youtube/claim {connection}` (needs `X-Session`) and drops its
+own copy; the account's connection is used on every device. `POST /youtube/disconnect` revokes the token at Google and
+deletes the account copy. `Restaurant.youtube_saved_to` = `"account" | "browser" | null`. Guests keep the per-browser
+behaviour below (browser copies expire after 90 days).
+
 **YouTube is per visitor:** the OAuth callback hands the visitor's browser an encrypted connection (URL fragment
 `#yt=…&n=<nonce>`, Fernet with `APP_SECRET`). The browser starts the flow with a random `nonce` and keeps the
 connection only if the returned `n` matches, so nobody can plant their own channel in someone else's browser. The browser keeps it in `localStorage` and sends it as `X-YouTube-Auth`; the server

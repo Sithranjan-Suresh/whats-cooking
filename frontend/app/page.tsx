@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { motion } from "framer-motion";
-import { acceptSignIn, acceptYouTubeConnection, api, fetcher, getSession, setYtBlob, signOut, startSignIn, startYouTubeConnect, ApiError } from "@/lib/api";
+import { acceptSignIn, acceptYouTubeConnection, api, fetcher, getSession, saveYouTubeToAccount, setYtBlob, signOut, startSignIn, startYouTubeConnect, ApiError } from "@/lib/api";
 import { cx, timeAgo } from "@/lib/format";
 import type { InsightCard, InsightsResponse, Job, MenuItem, Restaurant, SalesImportResult, Storyboard, Video } from "@/lib/types";
 import { DirectorPanel } from "@/components/director";
@@ -67,7 +67,15 @@ function App({ signin }: { signin: "ok" | "rejected" | null }) {
     }
     const hash = window.location.hash;
     const accepted = hash.startsWith("#yt=") && acceptYouTubeConnection(hash);
-    if (accepted) restaurant.mutate();
+    // Signed in: a YouTube connection held by this browser (fresh, or from before signing in) moves to the account.
+    if (getSession())
+      saveYouTubeToAccount()
+        .then((ch) => {
+          if (ch && !accepted) toast(`YouTube (${ch}) is now saved to your account.`, "ok");
+          restaurant.mutate();
+        })
+        .catch(() => restaurant.mutate());
+    else if (accepted) restaurant.mutate();
     if (signin === "ok") toast("Signed in. Your studio now follows you to any device.", "ok");
     if (signin === "rejected") toast("That sign-in link didn't start in this browser, so it was ignored. Try Sign in again.", "bad");
     if (params.get("signin") === "error") toast(`Sign-in didn't finish (${params.get("reason") ?? "unknown"}). Try again.`, "bad");
@@ -1420,7 +1428,7 @@ function StepYouTube({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean
       await api("/youtube/disconnect", { method: "POST" });
       setYtBlob(null);
       await restaurant.mutate();
-      toast("Disconnected on this device.", "info");
+      toast("Disconnected. YouTube access was revoked.", "info");
     } catch (e) {
       toast((e as Error).message, "bad");
     } finally {
@@ -1434,10 +1442,16 @@ function StepYouTube({ r, ytConfigured }: { r: Restaurant; ytConfigured: boolean
         <span className="grid h-7 w-10 shrink-0 place-items-center rounded-md bg-[#ff0033] text-[11px] font-bold text-white">▶</span>
         {r.youtube_connected ? (
           <span className="truncate text-cream">
-            Posting to <b>{r.youtube_channel_title ?? "your channel"}</b> <span className="text-muted">· only on this device</span>
+            Posting to <b>{r.youtube_channel_title ?? "your channel"}</b>{" "}
+            <span className="text-muted">
+              {r.youtube_saved_to === "account" ? "· saved to your account, works on every device" : "· only on this device (sign in to keep it everywhere)"}
+            </span>
           </span>
         ) : (
-          <span className="text-muted">Connect your channel once, then post any video in one tap. The connection stays in this browser.</span>
+          <span className="text-muted">
+            Connect your channel once, then post any video in one tap.{" "}
+            {getSession() ? "It's saved to your account." : "Guests: it stays in this browser. Signed in: it's saved to your account."}
+          </span>
         )}
       </div>
       {r.youtube_connected ? (

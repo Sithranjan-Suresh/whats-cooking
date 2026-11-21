@@ -38,6 +38,8 @@ export interface Restaurant {
   youtube_connected: boolean;
   youtube_configured?: boolean;
   youtube_channel_title: string | null;
+  /** Where this caller's YouTube connection lives: their signed-in account, or only this browser. */
+  youtube_saved_to?: "account" | "browser" | null;
   /** This studio still uses the demo restaurant's name / logo (new studios start as a copy of the demo). */
   demo_name?: boolean;
   demo_logo?: boolean;
