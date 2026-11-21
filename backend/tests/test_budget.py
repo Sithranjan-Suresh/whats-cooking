@@ -86,4 +86,23 @@ def test_usage_snapshot(restaurant):
     with Session(get_engine()) as s:
         snap = budget.usage_snapshot(s, restaurant, today=TODAY)
     assert snap["today"] == {"clips": 1, "limit": 10}
-    assert snap["month"] == {"est_cents": 64, "cap_cents": 1000}  # settings above the $10 hard cap are clamped
+    assert snap["total"]["spent_cents"] == 64 and snap["total"]["cap_cents"] == 1000  # above the $10 hard cap: clamped
+
+
+def test_cap_is_a_lifetime_total_not_monthly(restaurant):
+    """$10 means $10 ever: spend from earlier months and spend outside the ledger both count."""
+    from datetime import date
+
+    _settings(restaurant, daily_veo_clip_limit=50, monthly_cap_cents=200, veo_cost_per_sec_cents=8)  # 3 clips = 192¢
+    for d in (date(2026, 9, 3), date(2026, 10, 7), date(2026, 11, 1)):
+        assert budget.reserve_veo(restaurant, _job(restaurant), 8, today=d).allowed
+    with Session(get_engine()) as s:
+        c = budget.check(s, restaurant, 8, today=date(2026, 12, 1))  # a new month doesn't reset it
+    assert not c.allowed and c.reason == "monthly_cap"
+
+
+def test_spend_outside_the_ledger_counts(restaurant):
+    _settings(restaurant, daily_veo_clip_limit=50, monthly_cap_cents=1000, veo_cost_per_sec_cents=8, spent_outside_cents=960)
+    with Session(get_engine()) as s:
+        assert budget.check(s, restaurant, 8).allowed is False  # 960 + 64 > 1000
+        assert budget.usage_snapshot(s, restaurant)["total"]["spent_cents"] == 960

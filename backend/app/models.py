@@ -166,7 +166,8 @@ class AppSettings(SQLModel, table=True):
     __tablename__ = "settings"
     restaurant_id: int = Field(primary_key=True, foreign_key="restaurant.id")
     daily_veo_clip_limit: int = 10
-    monthly_cap_cents: int = 1000
+    monthly_cap_cents: int = 1000   # the TOTAL AI-video budget (lifetime, not per month; name kept for compatibility)
+    spent_outside_cents: int = 0    # AI spend not in the ledger (before the DB was persistent, test servers)
     free_mode: bool = False
     veo_cost_per_sec_cents: int = 8
 

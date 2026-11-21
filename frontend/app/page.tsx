@@ -781,8 +781,8 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
       {usage.data && (
         <p className={cx("mt-2 text-center font-mono text-[11px]", aiLeft === 0 ? "text-gold" : "text-muted")}>
           {aiLeft === 0
-            ? "AI motion budget used up · videos now use free photo motion"
-            : `✦ AI videos left: ${aiLeft} of ${usage.data.ai_videos_total} (shared $10 test budget)`}
+            ? "The $10 AI budget is used up · videos now use free photo motion"
+            : `✦ AI videos left: ${aiLeft} (of a $10 total budget, shared)`}
         </p>
       )}
       {!ready && (

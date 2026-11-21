@@ -243,18 +243,19 @@ def usage(actor: Actor = Depends(get_actor), session: Session = Depends(get_sess
     if reason in ("daily_limit", "monthly_cap"):
         message = budget.cap_message(session, r.id, reason, d.est_cost_cents)
     snap["veo"] = {"allowed": d.allowed and actor == "owner", "reason": reason, "message": message, "est_cents": d.est_cost_cents}
-    # How many more AI-motion videos fit under today's limit and the monthly cap (shown next to Action!).
+    # How many more AI-motion videos fit under today's limit and the total cap (shown next to Action!).
     per = max(1, d.est_cost_cents)
-    by_cap = max(0, snap["month"]["cap_cents"] - snap["month"]["est_cents"]) // per
+    by_cap = max(0, snap["total"]["cap_cents"] - snap["total"]["spent_cents"]) // per
     by_day = max(0, snap["today"]["limit"] - snap["today"]["clips"])
     snap["ai_videos_left"] = 0 if snap["free_mode"] else int(min(by_cap, by_day))
-    snap["ai_videos_total"] = int(snap["month"]["cap_cents"] // per)
+    snap["ai_videos_total"] = int(snap["total"]["cap_cents"] // per)
     return snap
 
 
 class SettingsPatch(BaseModel):
     daily_veo_clip_limit: Optional[int] = Field(default=None, ge=0, le=20)
-    monthly_cap_cents: Optional[int] = Field(default=None, ge=0, le=budget.HARD_CAP_CENTS)
+    monthly_cap_cents: Optional[int] = Field(default=None, ge=0, le=budget.HARD_CAP_CENTS)  # total cap
+    spent_outside_cents: Optional[int] = Field(default=None, ge=0, le=100000)
     free_mode: Optional[bool] = None
 
 

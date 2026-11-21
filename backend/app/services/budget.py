@@ -20,7 +20,8 @@ _lock = threading.Lock()
 
 ACTIVE = ("reserved", "committed")
 
-# Hard ceiling on estimated AI-motion spend per month, whatever the settings say. Raising it needs a code change.
+# Hard ceiling on TOTAL estimated AI-motion spend (lifetime, never resets), whatever the settings say.
+# Raising it needs a code change.
 HARD_CAP_CENTS = 1000
 
 
@@ -51,10 +52,11 @@ def usage_snapshot(session: Session, restaurant_id: int, today: Optional[date] =
     st = _global_settings(session)
     rows = session.exec(select(UsageLedger).where(UsageLedger.state.in_(ACTIVE))).all()
     clips_today = sum(1 for r in rows if r.date == today)
-    month_cents = sum(r.est_cost_cents for r in rows if (r.date.year, r.date.month) == (today.year, today.month))
+    spent = sum(r.est_cost_cents for r in rows) + st.spent_outside_cents  # all time, not this month
     return {
         "today": {"clips": clips_today, "limit": st.daily_veo_clip_limit},
-        "month": {"est_cents": month_cents, "cap_cents": _cap(st)},
+        "total": {"spent_cents": spent, "cap_cents": _cap(st), "outside_cents": st.spent_outside_cents},
+        "month": {"est_cents": spent, "cap_cents": _cap(st)},  # deprecated alias of total (it was never per month for real)
         "cost_per_sec_cents": st.veo_cost_per_sec_cents,
         "free_mode": st.free_mode,
     }
@@ -69,7 +71,7 @@ def check(session: Session, restaurant_id: int, seconds: int = 8, today: Optiona
         return Decision(False, "free_mode", est)
     if snap["today"]["clips"] >= st.daily_veo_clip_limit:
         return Decision(False, "daily_limit", est)
-    if snap["month"]["est_cents"] + est > _cap(st):
+    if snap["total"]["spent_cents"] + est > _cap(st):
         return Decision(False, "monthly_cap", est)
     return Decision(True, None, est)
 
@@ -86,8 +88,8 @@ def reserve_veo(restaurant_id: int, job_id: int, seconds: int = 8, today: Option
             clips_today = sum(1 for r in rows if r.date == today)
             if clips_today >= st.daily_veo_clip_limit:
                 return Decision(False, "daily_limit", est)
-            month = sum(r.est_cost_cents for r in rows if (r.date.year, r.date.month) == (today.year, today.month))
-            if month + est > _cap(st):
+            spent = sum(r.est_cost_cents for r in rows) + st.spent_outside_cents  # lifetime total
+            if spent + est > _cap(st):
                 return Decision(False, "monthly_cap", est)
             row = UsageLedger(
                 restaurant_id=restaurant_id, date=today, job_id=job_id, seconds=seconds,
@@ -133,5 +135,5 @@ def cap_message(session: Session, restaurant_id: int, reason: str, est_cents: in
                 "You can still make this one with free photo motion.")
     cap = _cap(st)
     money = f"${cap // 100}" if cap % 100 == 0 else f"${cap / 100:.2f}"
-    return (f"The {money} AI video budget for this month is used up. "
+    return (f"The {money} AI video budget is used up. "
             "You can still make videos with free photo motion.")

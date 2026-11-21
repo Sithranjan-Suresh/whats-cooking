@@ -69,6 +69,7 @@ def reset_engine() -> None:
 MIGRATIONS: list[tuple[str, str, str]] = [
     ("restaurant", "account_id", "INTEGER REFERENCES account(id)"),  # studios owned by a signed-in account
     ("restaurant", "mascot_asset_id", "INTEGER REFERENCES asset(id)"),  # mascot shown on the video's ending
+    ("settings", "spent_outside_cents", "INTEGER NOT NULL DEFAULT 0"),  # AI spend from before/outside the ledger
 ]
 
 

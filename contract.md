@@ -92,7 +92,7 @@ stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_ti
 | GET `/youtube/uploads` | visitor | `X-YouTube-Auth` | `{channel_title, videos:[{id, title, url, published_at, thumbnail, privacy}]}`: the visitor's videos made with the app (description tag `#WhatsCookingApp`), read live from their channel. 409 `youtube_not_connected` |
 | GET `/usage` | any | — | `Usage` |
 | GET `/settings` | any | — | `Settings` |
-| PATCH `/settings` | admin (`X-Admin-Token`) | `{daily_veo_clip_limit? 0–20, monthly_cap_cents? 0–1000, free_mode?}` | `Settings` |
+| PATCH `/settings` | admin (`X-Admin-Token`) | `{daily_veo_clip_limit? 0–20, monthly_cap_cents? 0–1000 (the TOTAL cap: lifetime, despite the name), spent_outside_cents?, free_mode?}` | `Settings` |
 
 `POST /jobs` rules: `photo` needs `photo_asset_id` (optional `menu_item_id` skips matching); `insight` needs
 `insight_id` (dish, photo and angle come from the insight; pass `photo_asset_id` if the dish has no photo);
@@ -132,7 +132,7 @@ Video { id, job_id, url, poster_url, dish, menu_item_id, duration_s, width, heig
         title, description, hashtags, youtube_id|null, youtube_url|null, youtube_privacy|null,
         publish_status:"draft"|"publishing"|"published"|"failed", publish_error|null, publish_progress, created_at }
 
-Usage { today:{clips, limit}, month:{est_cents, cap_cents}, cost_per_sec_cents, free_mode, ai_videos_left, ai_videos_total,
+Usage { today:{clips, limit}, total:{spent_cents, cap_cents, outside_cents}, month (deprecated alias of total), cost_per_sec_cents, free_mode, ai_videos_left, ai_videos_total,
         veo:{allowed, reason|null, message|null, est_cents} }   // "veo" = AI motion (field names kept from the Veo era): what would happen if this viewer asked for it now
 
 Storyboard { hook, beats:[{caption, seconds}], voiceover, shot (one plain sentence for the owner), veo_prompt, title, description, hashtags, facts_used }
