@@ -15,7 +15,7 @@ const courier = localFont({
 const archivo = localFont({ src: "./fonts/archivo.woff2", weight: "100 900", variable: "--f-archivo", display: "swap" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://whats-cooking-jade.vercel.app"),
+  metadataBase: new URL("https://whatscookinghq.vercel.app"),
   title: "What's Cooking?",
   description: "Turn one dish photo, or your sales data, into a narrated 8-second YouTube Short in a couple of minutes. No editing.",
   openGraph: {

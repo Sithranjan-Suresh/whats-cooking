@@ -1,7 +1,7 @@
 # CLAUDE.md — What's Cooking?
 
 Restaurant dish photo or sales CSV → grounded script → AI motion (Gemini Omni) or Ken Burns visuals → TTS → ffmpeg Short → YouTube.
-Solo project. Live: https://whats-cooking-jade.vercel.app (Vercel) + Render free (API). Original plan: `docs/planning/` (historical).
+Solo project. Live: https://whatscookinghq.vercel.app (Vercel) + Render free (API). Original plan: `docs/planning/` (historical).
 
 ## Layout
 - `backend/` FastAPI + SQLModel (Postgres via `DATABASE_URL`, e.g. Neon; else SQLite at `$DATA_DIR/app.db`; uploaded asset bytes also kept in `assetblob` and restored on boot) + in-process asyncio job queue + ffmpeg.

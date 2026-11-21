@@ -2,7 +2,7 @@
 
 **Turn one dish photo, or your sales data, into a narrated 8-second YouTube Short, then post it in one tap.**
 
-**Try it:** https://whats-cooking-jade.vercel.app
+**Try it:** https://whatscookinghq.vercel.app
 
 Built for small restaurants that know they should post short videos but have no time, no editor and no idea which
 dish to feature. Started at the LLMSoftware × UT Dallas Hackathon (Nov 2026, Special Recognition); this version
