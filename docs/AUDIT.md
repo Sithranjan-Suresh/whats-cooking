@@ -5,6 +5,20 @@ Scope: every page and route (`/`, `/privacy`, `/terms`, 404), every component in
 edge-tts, YouTube). Tested on the live site (Vercel + Render + Neon) in Chromium at 1440px, 768px, iPhone 13 and 360px,
 plus locally against a copy of the server (same Docker image, 512 MB limit) and the backend test suite on SQLite and Postgres.
 
+## Update — Nov 21, 2026
+
+Shipped since this audit (all live at https://whatscookinghq.vercel.app; details in commit history):
+**Director mode** (storyboard chat + preview frame) · **styles** Money shot / Chef POV / Classic (research-based:
+payoff in the first second, kitchen sound, native captions, loops) · **mascot creator** · **Google sign-in** with
+studios and YouTube on every device · **edit captions** (free re-render) · **videos survive restarts** · **$10
+lifetime AI cap** (was per month by mistake; counts earlier spend) · **25-item security checklist**
+([SECURITY.md](SECURITY.md)) · new address **whatscookinghq.vercel.app** (old one redirects). Tests: 97, on SQLite and
+Postgres, with render tests also run in the Render image.
+
+Still open: #11 paid hosting, #12 Google verification, #21 Content-Security-Policy, #23 delete video/studio,
+#25 studio cleanup, #27–#29 code/UX tidy-ups, plus a Results panel (views per style) and per-call Gemini cost
+tracking.
+
 **Status legend:** ✅ fixed and shipped in this pass · 🟡 open (recommended next) · 🔵 needs your decision (cost or
 architecture).
 
@@ -47,10 +61,10 @@ Effort: S = under an hour, M = a few hours, L = a day or more.
 | 7 | **Progress said "Animating it with AI" for free photo motion**, ETA "1–1.5 min" | `page.tsx` STEP_LABEL | Honesty; wrong expectations | "Animating your photo" + "~30s" when AI motion isn't used; overall estimate per mode | S | Med | ✅ |
 | 8 | **First-time visitors never see what the app makes** — empty phone frame | `components/stage.tsx` | Biggest conversion lever for a demo; Raj sees nothing until he waits 2 min | Real example Short (0.6 MB, made by the pipeline) loops muted in the empty player, labeled "Example · made from one photo" | S | High | ✅ (free-motion example; see #20) |
 | 9 | **Privacy policy described the old app** ("storage cleared on restart", "everyone shares one workspace") | `app/privacy/page.tsx` | Google OAuth verification reads it; legally inaccurate | Rewritten: studios, Neon storage, hosts, what's kept where, deletion requests | S | Med | ✅ |
-| 10 | **Rendered videos are lost on every server restart** (Render free disk is ephemeral); history hides them | `pipeline.py`, Render | Users lose videos they didn't post or download | Store videos and photos in object storage (Neon Object Storage, Cloudflare R2 or S3) instead of local disk / DB blobs | M–L | High | 🔵 |
+| 10 | **Rendered videos are lost on every server restart** (Render free disk is ephemeral); history hides them | `pipeline.py`, Render | Users lose videos they didn't post or download | Store videos and photos in object storage (Neon Object Storage, Cloudflare R2 or S3) instead of local disk / DB blobs | M–L | High | ✅ Nov 20: backed up in Postgres + restored on first request (Neon object storage isn't offered in this region; R2 later if needed) |
 | 11 | **Slow and fragile hosting:** 0.1 CPU, 512 MB, one video at a time, ~1 min cold start, jobs live inside the web process | Render free | 1–3 min per video, queue blocks other users, a restart kills in-flight jobs | Paid instance (Render Starter ≈ $7/mo) now; later a separate worker + queue | S (paid) / L (queue) | High | 🔵 |
 | 12 | **Google app is unverified:** warning screen, 100-user cap, uploads may be forced private | Google Cloud | Trust, and posts not visible publicly | Submit OAuth verification (privacy policy ✅, terms ✅, demo video, scopes justification) | M (mostly waiting) | High | 🔵 |
-| 13 | **Studio is tied to one browser** (no login): phone and laptop differ; clearing data loses it; the id is a bearer secret | `lib/api.ts`, `db.current_restaurant` | Real restaurants need the same studio everywhere and real access control | Google sign-in (doubles as YouTube connect), keep guest mode, claim guest studio on sign-in | L | High | 🔵 |
+| 13 | **Studio is tied to one browser** (no login): phone and laptop differ; clearing data loses it; the id is a bearer secret | `lib/api.ts`, `db.current_restaurant` | Real restaurants need the same studio everywhere and real access control | Google sign-in (doubles as YouTube connect), keep guest mode, claim guest studio on sign-in | L | High | ✅ Nov 20–21: Google sign-in, guest studio claimed on first sign-in, YouTube saved to the account |
 
 ### P2 — Polish and enhancements
 
@@ -62,17 +76,17 @@ Effort: S = under an hour, M = a few hours, L = a day or more.
 | 17 | Missing security headers (only HSTS) | `next.config.mjs` | X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy | S | ✅ verified live |
 | 18 | No link preview image (sharing the link showed text only); meta description said "about a minute" | `app/layout.tsx` | 1200×630 `og.png` from a real frame; accurate description | S | ✅ |
 | 19 | Default unstyled 404; name field could be cleared silently, no save feedback | `app/not-found.tsx`, StepLogo | Themed 404; blank name reverts; "✓ Saved" | S | ✅ |
-| 20 | Example Short uses free photo motion, which undersells the AI motion | `public/example-short.mp4` | Re-make it with AI motion (costs one AI video, ≈$0.64 of the budget) | S | 🔵 |
+| 20 | Example Short uses free photo motion, which undersells the AI motion | `public/example-short.mp4` | Re-make it with AI motion (costs one AI video, ≈$0.64 of the budget) | S | ✅ Nov 20: AI-motion Money shot example |
 | 21 | No Content-Security-Policy | `next.config.mjs` | CSP allowing self, the API origin (connect/media), Google sign-in; test carefully | M | 🟡 |
-| 22 | You can't see or edit the narration/captions before posting; Post dialog can't edit description/hashtags | ResultPanel, PostDialog | Show the script under the video; "Edit captions" uses the existing `/jobs/{id}/edit` (already validated by the grounding checker) | M | 🟡 |
+| 22 | You can't see or edit the narration/captions before posting; Post dialog can't edit description/hashtags | ResultPanel, PostDialog | Show the script under the video; "Edit captions" uses the existing `/jobs/{id}/edit` (already validated by the grounding checker) | M | ✅ Nov 20: 'What's in this video' + Edit captions (free re-render) + editable description/hashtags |
 | 23 | No delete (video or studio) | API + UI | `DELETE /videos/{id}`, "Delete my studio" | M | 🟡 |
-| 24 | Disconnect YouTube only forgets it in the browser; the Google grant stays until revoked | `routers/videos.py` | Revoke the refresh token at Google on disconnect | S | 🟡 |
+| 24 | Disconnect YouTube only forgets it in the browser; the Google grant stays until revoked | `routers/videos.py` | Revoke the refresh token at Google on disconnect | S | ✅ Nov 21: disconnect revokes at Google |
 | 25 | Abandoned studios and their photo blobs are never cleaned up | DB | Nightly cleanup of studios idle > 30 days with no videos | S | 🟡 |
 | 26 | Per-IP limits are a speed bump only: rotating proxies bypass them (verified: this test machine's IP changes per request). Queue cap (4) and the $10 hard cap still hold. | `jobs._admit` | Fine for a demo; with login, limit per account | — | 🟡 note |
 | 27 | `page.tsx` is ~1000 lines with 10 components | frontend | Split into `components/steps/*`, `components/history/*` | M | 🟡 |
 | 28 | API keeps features the UI no longer uses (demo mode + owner token, menu import, sales map, confirm-dish, mock pipeline) | backend | Keep (tested, useful for dev) or prune in one cleanup PR | M | 🟡 |
 | 29 | Mobile: the example video sits after step 3 | `page.tsx` | Optional "See an example" chip near the top on phones | S | 🟡 |
-| 30 | CORS always allows localhost:3000 in production | `main.py` | Only add localhost when not in production | S | 🟡 |
+| 30 | CORS always allows localhost:3000 in production | `main.py` | Only add localhost when not in production | S | ✅ Nov 21: production CORS lists only the site |
 
 ### P3 — Future features (product)
 

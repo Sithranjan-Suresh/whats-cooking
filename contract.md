@@ -94,10 +94,15 @@ stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_ti
 | POST `/videos/{id}/publish` | owner | `{title, description, tags:[str], privacy:"private"\|"unlisted"\|"public"}` | **202** `{publish_status:"publishing"}`. Poll `/videos/{id}` (`publish_progress` 0–100) |
 | GET `/youtube/auth/url` | any | `?nonce=` (16–64 chars `[A-Za-z0-9_-]`, made and kept by the browser) | `{url}` Google consent URL (frontend navigates to it). Any visitor can connect their own channel |
 | GET `/youtube/auth/callback` | Google | `code, state` | 302 → `{FRONTEND_ORIGIN}/?youtube=connected#yt=<encrypted connection>&n=<nonce>` (or `/?youtube=error&reason=…`) |
-| POST `/youtube/disconnect` | any | — | `{ok:true}`. Nothing is stored server-side; the browser forgets its connection |
+| POST `/youtube/disconnect` | any | — | `{ok:true}`. Revokes the caller's connection at Google (account copy deleted; the browser drops its own) |
+| POST `/youtube/claim` | signed in (`X-Session`) | `{connection}` (a browser-held `#yt=` blob) | `{ok, channel_title}`: saves it to the account; 401 `signin_required`, 400 `youtube_reconnect_required` |
+| GET `/auth/google/url` | any (30/h) | `?nonce=` | `{url}` Google sign-in |
+| GET `/auth/me` | any | `X-Session?` | `{account: {id,email,name,picture} \| null}` |
+| POST `/mascot/options` | studio (limits) | `{description}` | `{options:[{option_id,url}]}` |
+| POST `/mascot/choose` | studio | `{option_id \| null}` | `Restaurant` |
 | GET `/youtube/uploads` | visitor | `X-YouTube-Auth` | `{channel_title, videos:[{id, title, url, published_at, thumbnail, privacy}]}`: the visitor's videos made with the app (description tag `#WhatsCookingApp`), read live from their channel. 409 `youtube_not_connected` |
 | GET `/usage` | any | — | `Usage` |
-| GET `/settings` | any | — | `Settings` |
+| GET `/settings` | admin (`X-Admin-Token`) | — | `Settings` |
 | PATCH `/settings` | admin (`X-Admin-Token`) | `{daily_veo_clip_limit? 0–20, monthly_cap_cents? 0–1000 (the TOTAL cap: lifetime, despite the name), spent_outside_cents?, free_mode?}` | `Settings` |
 
 `POST /jobs` rules: `photo` needs `photo_asset_id` (optional `menu_item_id` skips matching); `insight` needs
@@ -109,7 +114,8 @@ stores none. `/restaurants/me` reports `youtube_connected` / `youtube_channel_ti
 ```ts
 Restaurant { id, name, slug, logo_asset_id, logo_url, color_primary:"#RRGGBB", color_accent, voice_tone:"friendly"|"upbeat"|"elegant",
              tts_voice, menu_count, has_sales, youtube_configured, youtube_connected (this visitor), youtube_channel_title, voices:[{id,label}],
-             demo_name, demo_logo (this studio still uses the demo's name / logo) }
+             demo_name, demo_logo (this studio still uses the demo's name / logo), mascot_url,
+             youtube_saved_to: "account"|"browser"|null }
 
 MenuItem { id, name, price_cents|null, price:"$14.99"|null, description|null, category|null, photo_asset_id|null, photo_url|null }
 
