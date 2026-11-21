@@ -1,7 +1,7 @@
 """Google sign-in. See accounts.py (sessions) and db.current_restaurant (account studios, guest claim)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlmodel import Session
 
 from ..db import account_var, get_session
@@ -13,8 +13,12 @@ router = APIRouter()
 
 
 @router.get("/auth/google/url")
-def google_url(nonce: str = Query(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")):
+def google_url(request: Request, nonce: str = Query(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")):
     """Google consent URL for signing in. The browser keeps `nonce` and accepts only a session that echoes it."""
+    from ..config import get_settings
+    from .director import _limit
+
+    _limit("signin", request, get_settings().signins_per_hour_per_ip, "sign-in attempts")
     try:
         return {"url": youtube.login_url(nonce)}
     except youtube.YouTubeError as e:

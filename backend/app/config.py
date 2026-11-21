@@ -72,10 +72,17 @@ class Settings(BaseSettings):
     media_db_cap_mb: int = 300  # rendered videos/posters/clips kept in the DB; oldest cleared past this
     director_image_model: str = "gemini-3.1-flash-image"
     director_plans_per_hour_per_ip: int = 60
+    director_plans_per_day: int = 3000   # all visitors together (Gemini Flash text, a fraction of a cent each)
+    signins_per_hour_per_ip: int = 30
     director_previews_per_hour_per_ip: int = 10
     director_previews_per_day: int = 40  # all visitors together (~4¢ each)
     mascot_batches_per_hour_per_ip: int = 4
     mascot_batches_per_day: int = 15      # all visitors together (4 images, ~15¢ per batch)
+
+    @property
+    def is_production(self) -> bool:
+        """Deployed (served over HTTPS), as opposed to local development."""
+        return self.public_base_url.startswith("https://")
 
     @property
     def media_dir(self) -> Path:

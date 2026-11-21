@@ -49,9 +49,17 @@ def _client_config() -> dict:
     }
 
 
+def _state_key() -> bytes:
+    """OAuth state is signed with APP_SECRET; never with a guessable fallback."""
+    secret = get_settings().app_secret
+    if not secret:
+        raise YouTubeError("not_configured", "APP_SECRET is not set on the server.")
+    return secret.encode()
+
+
 def _sign(payload: dict) -> str:
     raw = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
-    key = (get_settings().app_secret or "dev").encode()
+    key = _state_key()
     sig = hmac.new(key, raw.encode(), hashlib.sha256).hexdigest()[:32]
     return f"{raw}.{sig}"
 
@@ -61,7 +69,7 @@ def _verify(state: str) -> dict:
         raw, sig = state.rsplit(".", 1)
     except ValueError as e:
         raise YouTubeError("bad_state", "Invalid OAuth state") from e
-    key = (get_settings().app_secret or "dev").encode()
+    key = _state_key()
     want = hmac.new(key, raw.encode(), hashlib.sha256).hexdigest()[:32]
     if not hmac.compare_digest(sig, want):
         raise YouTubeError("bad_state", "Invalid OAuth state")
@@ -122,7 +130,8 @@ def exchange_login(code: str, state: str) -> dict:
     claims = id_token.verify_oauth2_token(raw, grequests.Request(), get_settings().google_oauth_client_id)
     if not claims.get("sub"):
         raise YouTubeError("no_id_token", "Google didn't return an identity. Try signing in again.")
-    return {"sub": claims["sub"], "email": claims.get("email", ""), "name": claims.get("name", ""),
+    email = claims.get("email", "") if claims.get("email_verified") else ""  # never trust an unverified address
+    return {"sub": claims["sub"], "email": email, "name": claims.get("name", ""),
             "picture": claims.get("picture", ""), "nonce": payload.get("n") or ""}
 
 

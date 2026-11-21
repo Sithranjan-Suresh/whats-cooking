@@ -11,7 +11,13 @@ import uuid
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, Request, UploadFile
+import warnings
+
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+# A small file can declare a gigantic image ("decompression bomb") and exhaust a 512 MB server while decoding.
+# 40 MP is plenty for any phone photo (a 12 MP shot is 4032x3024).
+Image.MAX_IMAGE_PIXELS = 40_000_000
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -101,8 +107,14 @@ def save_image_asset(session: Session, restaurant_id: int, data: bytes, mime: st
     if mime not in ALLOWED_MIME or (kind == "logo" and mime not in ("image/png", "image/webp", "image/jpeg")):
         raise AppError("bad_mime", "Use a JPG or PNG under 10 MB.", 415)
     try:
-        img = Image.open(io.BytesIO(data))
-        img = ImageOps.exif_transpose(img)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)  # treat "too big" as an error too
+            img = Image.open(io.BytesIO(data))
+            if img.width * img.height > Image.MAX_IMAGE_PIXELS:
+                raise AppError("image_too_large", "That image is too large. Use a photo under 40 megapixels.", 413)
+            img = ImageOps.exif_transpose(img)
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as e:
+        raise AppError("image_too_large", "That image is too large. Use a photo under 40 megapixels.", 413) from e
     except (UnidentifiedImageError, OSError) as e:
         raise AppError("bad_image", "That file isn't a readable image.", 415) from e
     ext = ALLOWED_MIME[mime]
@@ -259,12 +271,6 @@ class SettingsPatch(BaseModel):
     free_mode: Optional[bool] = None
 
 
-@router.get("/settings")
-def get_settings_route(session: Session = Depends(get_session)):
-    r = template_restaurant(session)  # one shared budget for every studio
-    return get_app_settings(session, r.id).model_dump()
-
-
 def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
     """Budget settings move real money, so they need ADMIN_TOKEN (never sent by the web app)."""
     real = get_settings().admin_token
@@ -272,6 +278,12 @@ def require_admin(x_admin_token: Optional[str] = Header(default=None)) -> None:
         raise AppError("settings_locked", "Budget settings are locked on this server (no ADMIN_TOKEN set).", 403)
     if not x_admin_token or not hmac.compare_digest(x_admin_token, real):
         raise AppError("admin_required", "Changing budget settings needs the admin key.", 403)
+
+
+@router.get("/settings")
+def get_settings_route(_: None = Depends(require_admin), session: Session = Depends(get_session)):
+    r = template_restaurant(session)  # one shared budget for every studio
+    return get_app_settings(session, r.id).model_dump()
 
 
 @router.patch("/settings")

@@ -23,6 +23,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     ensure_dirs()
+    s = get_settings()
+    if s.is_production and not s.app_secret:
+        # Sessions, YouTube connections and OAuth state are all signed/encrypted with it: refuse to run without it.
+        raise RuntimeError("APP_SECRET must be set in production (make secrets).")
     init_db()
     restore_media()
     await job_queue.start(get_settings().workers)
@@ -101,7 +105,8 @@ def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(title="What's Cooking? API", version="1.0.0", lifespan=lifespan)
     origins = {o.strip().rstrip("/") for o in s.frontend_origin.split(",") if o.strip()}
-    origins |= {"http://localhost:3000", "http://127.0.0.1:3000"}
+    if not s.is_production:  # local dev only: never let localhost pages call the live API
+        origins |= {"http://localhost:3000", "http://127.0.0.1:3000"}
     app.add_middleware(MediaRestoreMiddleware)
     app.add_middleware(WorkspaceMiddleware)  # inside CORS, so its errors still carry CORS headers
     app.add_middleware(

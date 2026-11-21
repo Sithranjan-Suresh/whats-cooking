@@ -14,6 +14,9 @@ from fastapi import Header
 from .util import decrypt, encrypt
 
 
+CONNECTION_DAYS = 90  # a stolen connection can't be used forever; people reconnect every 3 months
+
+
 def encode_connection(refresh_token: str, channel_id: Optional[str], channel_title: Optional[str]) -> str:
     return encrypt(json.dumps({"rt": refresh_token, "cid": channel_id, "ct": channel_title}))
 
@@ -23,8 +26,8 @@ def viewer_youtube(x_youtube_auth: Optional[str] = Header(default=None)) -> Opti
     if not x_youtube_auth:
         return None
     try:
-        data = json.loads(decrypt(x_youtube_auth))
-    except Exception:  # noqa: BLE001
+        data = json.loads(decrypt(x_youtube_auth, ttl=CONNECTION_DAYS * 86400))
+    except Exception:  # noqa: BLE001  (tampered, old secret, or expired: reconnect)
         return None
     if not isinstance(data, dict) or not data.get("rt"):
         return None

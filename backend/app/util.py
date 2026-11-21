@@ -69,8 +69,9 @@ def encrypt(plain: str) -> str:
     return _fernet().encrypt(plain.encode()).decode()
 
 
-def decrypt(token: str) -> str:
+def decrypt(token: str, ttl: int | None = None) -> str:
+    """ttl (seconds): reject tokens older than this (Fernet stores the issue time)."""
     try:
-        return _fernet().decrypt(token.encode()).decode()
+        return _fernet().decrypt(token.encode(), ttl=ttl).decode()
     except InvalidToken as e:
         raise RuntimeError("Could not decrypt stored token (APP_SECRET changed?)") from e

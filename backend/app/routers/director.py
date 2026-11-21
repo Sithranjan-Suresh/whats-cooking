@@ -25,6 +25,7 @@ router = APIRouter()
 
 _hits: dict[tuple[str, str], deque] = defaultdict(deque)
 _previews_today: dict[str, int] = {}
+_plans_today: dict[str, int] = {}
 
 
 def _limit(bucket: str, request: Request, per_hour: int, what: str) -> None:
@@ -75,7 +76,14 @@ async def _visual_notes(item: MenuItem, asset: Optional[Asset]) -> str:
 @router.post("/director/plan")
 async def plan(body: PlanBody, request: Request, session: Session = Depends(get_session)):
     """First call: the opening storyboard. Later calls: send `message` + the current storyboard + history."""
-    _limit("plan", request, get_settings().director_plans_per_hour_per_ip, "director messages")
+    s = get_settings()
+    today = date.today().isoformat()
+    if _plans_today.get(today, 0) >= s.director_plans_per_day:
+        raise AppError("rate_limited", "The AI director is resting for today. Try again tomorrow.", 429)
+    _limit("plan", request, s.director_plans_per_hour_per_ip, "director messages")
+    if today not in _plans_today:
+        _plans_today.clear()
+    _plans_today[today] = _plans_today.get(today, 0) + 1
     r = current_restaurant(session)
     item, asset = _dish(session, body.menu_item_id)
     out = await director.plan(

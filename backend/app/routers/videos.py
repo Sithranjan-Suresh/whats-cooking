@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import quote
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -81,7 +81,8 @@ async def _publish_task(video_id: int, refresh_token: str, body: PublishBody) ->
         _set_video(video_id, publish_status="failed", publish_error=e.message)
     except Exception as e:  # noqa: BLE001
         log.exception("publish crashed")
-        _set_video(video_id, publish_status="failed", publish_error=f"Upload failed: {e}"[:300])
+        log.exception("publish %s failed", video_id)  # details stay in the server log
+        _set_video(video_id, publish_status="failed", publish_error="Upload to YouTube failed. Try posting again.")
 
 
 _tasks: set[asyncio.Task] = set()
@@ -134,13 +135,19 @@ def yt_auth_url(nonce: str = Query(min_length=16, max_length=64, pattern=r"^[A-Z
 
 
 @router.get("/youtube/auth/callback")
-def yt_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+def yt_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
     front = get_settings().frontend_origin.split(",")[0].strip().rstrip("/")
     if error or not code or not state:
         purpose = _purpose(state)
         kind = "signin" if purpose == "login" else "youtube"
         return RedirectResponse(f"{front}/?{kind}=error&reason={error or 'missing_code'}", status_code=302)
     if _purpose(state) == "login":  # Google sign-in shares this redirect URI
+        from .director import _limit
+
+        try:
+            _limit("signin_cb", request, get_settings().signins_per_hour_per_ip, "sign-in attempts")
+        except AppError:
+            return RedirectResponse(f"{front}/?signin=error&reason=rate_limited", status_code=302)
         return _finish_login(code, state, front)
     try:
         info = youtube.exchange_code(code, state)
