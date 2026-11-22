@@ -731,39 +731,49 @@ async def assemble_loop(
     link_fonts(work)
     (work / "captions.ass").write_text(ass_text, encoding="utf-8")
     badge = _logo_badge(logo, work)
+    gain_db = 0.0
     if ambient and Path(ambient).exists():
         lufs = await integrated_loudness(Path(ambient))
         if lufs is None or lufs < SILENT_LUFS:
             log.info("AI clip sound is silent (%s LUFS): using music", lufs)
             ambient = None
+        else:
+            # Bring the food sound to LOOP_LOUDNESS with a measured gain + a limiter. (ffmpeg's loudnorm filter did
+            # the same but peaked at ~450 MB on a 512 MB host.)
+            gain_db = max(-10.0, min(24.0, LOOP_LOUDNESS - lufs))
     m_img = _load_mascot(mascot, MASCOT_LOOP_PX)
     m_png = None
     if m_img is not None:
         m_png = work / "mascot.png"
         m_img.save(m_png)
-    inputs = ["-i", str(visuals)]
-    if badge:
-        inputs += ["-loop", "1", "-i", str(badge)]
-    m_idx = 1 + int(bool(badge))
+    # The loop blend needs the first LOOP_XFADE seconds again at the end. Cut them into a tiny file first: feeding
+    # the same clip twice (split, or a second input) made ffmpeg buffer ~8 s of raw frames: ~270 MB on a 512 MB host.
+    head = work / "loop_head.mp4"
+    await ffmpeg(["-i", str(visuals), "-t", f"{LOOP_XFADE + 0.1:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast",
+                  "-crf", "18", "-pix_fmt", "yuv420p", head.name], cwd=work)
+    inputs = ["-i", str(visuals), "-i", head.name]
+    if badge:  # bounded (rate + duration): an endless still input makes ffmpeg read ahead and buffer
+        inputs += ["-loop", "1", "-framerate", str(FPS), "-t", f"{total:.3f}", "-i", str(badge)]
+    b_idx = 2
+    m_idx = 2 + int(bool(badge))
     if m_png:
-        inputs += ["-loop", "1", "-t", f"{total:.3f}", "-i", str(m_png)]
+        inputs += ["-loop", "1", "-framerate", str(FPS), "-t", f"{total:.3f}", "-i", str(m_png)]
     has_amb = bool(ambient and Path(ambient).exists())
     has_music = bool(music and Path(music).exists()) and not has_amb
-    a_idx = 1 + int(bool(badge)) + int(bool(m_png))
+    a_idx = 2 + int(bool(badge)) + int(bool(m_png))
     if has_amb:
         inputs += ["-i", str(ambient)]
     elif has_music:
         inputs += ["-stream_loop", "-1", "-i", str(music)]
     x = LOOP_XFADE
     vf = (
-        f"[0:v]setsar=1,format=yuv420p,fps={FPS},settb=AVTB,split=2[a][b];"
         # ffmpeg 7 (Render): xfade needs a constant frame rate restated after trim/setpts
-        f"[a]trim=0:{total:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[main];"
-        f"[b]trim=0:{x:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[head];"
+        f"[0:v]setsar=1,format=yuv420p,fps={FPS},settb=AVTB,trim=0:{total:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[main];"
+        f"[1:v]setsar=1,format=yuv420p,fps={FPS},settb=AVTB,trim=0:{x:.3f},setpts=PTS-STARTPTS,fps={FPS},settb=AVTB[head];"
         f"[main][head]xfade=transition=fade:duration={x}:offset={total - x:.3f}[looped]"
     )
     if badge:
-        vf += f";[looped][1:v]overlay=x=W-w-44:y=150:shortest=1:format=auto[lg]"
+        vf += f";[looped][{b_idx}:v]overlay=x=W-w-44:y=150:shortest=1:format=auto[lg]"
         last = "[lg]"
     else:
         last = "[looped]"
@@ -777,7 +787,8 @@ async def assemble_loop(
     if has_amb:
         # the food sound is the soundtrack: bring it to a consistent loudness (AI clips vary a lot)
         af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,"
-              f"loudnorm=I={LOOP_LOUDNESS}:TP=-1.5:LRA=11,{fmt},asetpts=N/SR/TB,apad,atrim=0:{total:.3f},asetpts=N/SR/TB,"
+              f"volume={gain_db:.2f}dB,alimiter=limit=0.84:attack=5:release=50,asetpts=N/SR/TB,"
+              f"apad,atrim=0:{total:.3f},asetpts=N/SR/TB,"
               f"afade=t=in:d=0.12,afade=t=out:st={total - x:.3f}:d={x}[aout]")
     elif has_music:
         af = (f"[{a_idx}:a]{fmt},atrim=0:{total:.3f},asetpts=N/SR/TB,volume=-12dB,afade=t=in:d=0.3,"

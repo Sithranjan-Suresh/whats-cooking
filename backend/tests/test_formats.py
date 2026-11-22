@@ -87,7 +87,7 @@ def _lufs(url):
 
 
 def test_quiet_kitchen_sound_is_brought_up_to_a_consistent_loudness(client, monkeypatch):
-    _fake_clip_with(monkeypatch, "anoisesrc=d=8:a=0.004")  # very quiet, like the real money-shot clip (-40 LUFS)
+    _fake_clip_with(monkeypatch, "anoisesrc=d=8:a=0.0125")  # quiet like the real money-shot clip (about -40 LUFS)
     j = _job(client, "money_shot", veo=True)
     assert j["status"] == "done", j
     assert "kitchen sound" in next(s for s in j["stages"] if s["name"] == "assemble")["note"]
