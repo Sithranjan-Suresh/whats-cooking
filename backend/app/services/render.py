@@ -251,6 +251,12 @@ def beat_windows(beats: list[dict], main_len: float, speech: Optional[tuple[floa
     return out
 
 
+# Mascot inside the AI video: its size and place in the first frame, and the caption line that clears its head.
+MASCOT_IN_SHOT_H = 430
+MASCOT_IN_SHOT_BOTTOM = 110
+MASCOT_CAPTION_MARGIN = MASCOT_IN_SHOT_BOTTOM + MASCOT_IN_SHOT_H + 30
+
+
 def build_ass(
     script: dict,
     main_len: float,
@@ -261,9 +267,16 @@ def build_ass(
     speech: Optional[tuple[float, float]] = None,
     outro: Optional[str] = None,
     beats_until: Optional[float] = None,
+    clear_mascot: bool = False,
 ) -> str:
-    """outro: small 'Restaurant · Dish' line for the last ~1.6s (formats without a logo slate)."""
+    """outro: small 'Restaurant · Dish' line for the last ~1.6s (formats without a logo slate).
+    clear_mascot: the mascot stands in the bottom-left of the shot, so captions sit just above its head."""
     p = STYLE_PRESETS.get(style, STYLE_PRESETS["bold"])
+    beat_margin = p.get("beat_margin", 300)
+    if clear_mascot:
+        beat_margin = max(beat_margin, MASCOT_CAPTION_MARGIN)
+    # the name line moves right of the mascot (bottom-right) instead of over it
+    outro_pos = "3,380,40,150,1" if clear_mascot else "2,60,60,150,1"
     font = p.get("font", "Oswald")
     text_col = ass_color("#FFFFFF") if p.get("white") else ass_color(color_accent)
     hook_col = ass_color("#FFFFFF") if p.get("white") else ass_color(color_primary)
@@ -278,9 +291,9 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Beat,{font},{p['size']},{text_col},{text_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline']},{p['shadow']},2,50,50,{p.get('beat_margin', 300)},1
+Style: Beat,{font},{p['size']},{text_col},{text_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline']},{p['shadow']},2,50,50,{beat_margin},1
 Style: Hook,{font},{int(p['size'] * 1.05)},{hook_col},{hook_col},{outline},{back},-1,0,0,0,100,100,1,0,1,{p['outline'] + 1},{p['shadow']},8,50,50,230,1
-Style: Outro,{font},44,{ass_color("#FFFFFF")},{ass_color("#FFFFFF")},{outline},{back},-1,0,0,0,100,100,1,0,1,3,0,2,60,60,150,1
+Style: Outro,{font},44,{ass_color("#FFFFFF")},{ass_color("#FFFFFF")},{outline},{back},-1,0,0,0,100,100,1,0,1,3,0,{outro_pos}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -578,10 +591,10 @@ def mascot_first_frame(photo: Path, mascot: Path, work: Path) -> Path:
         ch = int(w * 16 / 9)
         img = img.crop((0, (h - ch) // 2, w, (h - ch) // 2 + ch))
     frame = img.resize((720, 1280), Image.LANCZOS).convert("RGBA")
-    m = _load_mascot(mascot, 430)
+    m = _load_mascot(mascot, MASCOT_IN_SHOT_H)
     if m is None:
         raise FileNotFoundError(mascot)
-    x, y = 24, 1280 - m.height - 110
+    x, y = 24, 1280 - m.height - MASCOT_IN_SHOT_BOTTOM
     shadow_mask = m.getchannel("A").point(lambda v: int(v * 0.45)).filter(ImageFilter.GaussianBlur(10))
     shadow = Image.new("RGBA", frame.size, (0, 0, 0, 0))
     shadow.paste(Image.new("RGBA", m.size, (20, 10, 5, 255)), (x + 14, y + 18), shadow_mask)

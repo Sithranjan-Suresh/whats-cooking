@@ -117,3 +117,21 @@ def test_mascot_inside_the_ai_video(client, monkeypatch):
     # the loop ending doesn't add a second mascot (it's already in the scene): the centre of the last moment
     r2, g2, b2 = _pixel(j["video"]["url"], 7.2, (360, 1280 - 230 - 150))
     assert not (r2 > 150 and g2 < 110 and b2 < 110)
+
+
+def test_captions_clear_the_mascot_in_the_shot():
+    from app.services import render
+
+    script = {"hook": "", "beats": [{"caption": "Rich & creamy", "seconds": 3.0}]}
+    plain = render.build_ass(script, 8.0, color_primary="#111111", color_accent="#EEEEEE")
+    raised = render.build_ass(script, 8.0, color_primary="#111111", color_accent="#EEEEEE", clear_mascot=True,
+                              outro="Kumar's · Butter Chicken")
+
+    def style(ass, name):
+        return next(l for l in ass.splitlines() if l.startswith(f"Style: {name},")).split(",")
+
+    assert int(style(plain, "Beat")[21]) == 300
+    # beat captions sit above the mascot's head (mascot top = bottom margin + height)
+    assert int(style(raised, "Beat")[21]) > render.MASCOT_IN_SHOT_BOTTOM + render.MASCOT_IN_SHOT_H
+    outro = style(raised, "Outro")
+    assert outro[18] == "3" and int(outro[19]) >= 360  # bottom-right, right of the mascot

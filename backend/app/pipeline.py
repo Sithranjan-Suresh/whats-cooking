@@ -496,7 +496,8 @@ async def _assemble(ctx: Ctx, visuals: Path, voice: Optional[dict]) -> None:
     if voice and voice.get("timings"):
         speech = (voice["timings"][0]["start"] + 0.3, voice["timings"][-1]["end"] + 0.3)
     ass = render.build_ass(ctx.script, main_len, color_primary=ctx.restaurant["color_primary"],
-                           color_accent=ctx.restaurant["color_accent"], style=ctx.style, speech=speech)
+                           color_accent=ctx.restaurant["color_accent"], style=ctx.style, speech=speech,
+                           clear_mascot=ctx.mascot_in_video)
     card = await (ctx.card_task or _start_end_card(ctx))
     media = get_settings().media_dir
     out = media / "videos" / f"job_{jid}_{secrets.token_hex(8)}.mp4"  # unguessable: /media is public
@@ -523,7 +524,8 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
     has_mascot = bool(ctx.mascot_path and ctx.mascot_path.exists()) and not ctx.mascot_in_video
     ass = render.build_ass(ctx.script, end, color_primary=ctx.restaurant["color_primary"],
                            color_accent=ctx.restaurant["color_accent"], style=ctx.fmt.caption_style, outro=outro,
-                           beats_until=(ctx.main_len - render.MASCOT_MOMENT_S - 0.05) if has_mascot else None)
+                           beats_until=(ctx.main_len - render.MASCOT_MOMENT_S - 0.05) if has_mascot else None,
+                           clear_mascot=ctx.mascot_in_video)
     media = get_settings().media_dir
     out = media / "videos" / f"job_{jid}_{secrets.token_hex(8)}.mp4"
     try:
