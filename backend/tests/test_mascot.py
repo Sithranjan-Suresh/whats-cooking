@@ -78,3 +78,42 @@ def test_mascot_appears_on_the_ending(client, monkeypatch):
         assert j["status"] == "done", j
         r, g, b = _pixel(j["video"]["url"], t, xy)
         assert r > 150 and g < 110 and b < 110, (fmt, (r, g, b))  # the red mascot is on screen
+
+
+def test_mascot_inside_the_ai_video(client, monkeypatch):
+    from PIL import Image as _Image
+
+    from app.services import veo
+
+    _enable(monkeypatch)
+    seen = {}
+
+    async def fake_clip(photo, mime, prompt, out_path, *, seconds=8):
+        im = _Image.open(photo).convert("RGB")
+        seen.update(size=im.size, prompt=prompt, px=im.getpixel((24 + 120, 1280 - 110 - 120)))
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-loop", "1", "-i", str(photo), "-f", "lavfi", "-i",
+                        "anoisesrc=d=8:a=0.2", "-t", "8", "-r", "24", "-c:v", "libx264", "-preset", "ultrafast",
+                        "-threads", "2", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(out_path)], check=True)
+        return out_path
+
+    monkeypatch.setattr(veo, "generate_clip", fake_clip)
+    # no mascot yet -> clear error
+    menu = client.get("/menu").json()
+    item = next(m for m in menu if m["name"] == "Chicken Biryani")
+    up = client.post("/uploads", files={"file": ("d.jpg", _jpeg(), "image/jpeg")}, data={"kind": "photo"}).json()
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"],
+                                   "veo": True, "format": "money_shot", "mascot": True}, headers=OWNER)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "no_mascot"
+    opts = client.post("/mascot/options", json={"description": "a happy red tomato"}).json()["options"]
+    client.post("/mascot/choose", json={"option_id": opts[0]["option_id"]})
+    r = client.post("/jobs", json={"mode": "menu", "menu_item_id": item["id"], "photo_asset_id": up["asset_id"],
+                                   "veo": True, "format": "money_shot", "mascot": True}, headers=OWNER)
+    j = _wait(client, r.json()["job_id"], until=("done", "failed"), timeout=150)
+    assert j["status"] == "done" and j["veo_used"], j
+    assert seen["size"] == (720, 1280)  # the AI animates a 9:16 first frame...
+    rr, gg, bb = seen["px"]
+    assert rr > 150 and gg < 110 and bb < 110  # ...with the (red) mascot standing in it, lower-left
+    assert "Meanwhile" in seen["prompt"] and "same flat 2D cartoon" in seen["prompt"]
+    # the loop ending doesn't add a second mascot (it's already in the scene): the centre of the last moment
+    r2, g2, b2 = _pixel(j["video"]["url"], 7.2, (360, 1280 - 230 - 150))
+    assert not (r2 > 150 and g2 < 110 and b2 < 110)

@@ -112,6 +112,7 @@ class JobCreate(BaseModel):
     veo: bool = False
     storyboard: Optional[dict] = None  # Director mode: the approved plan (re-checked against the menu here)
     format: Literal["classic", "money_shot", "chef_pov"] = "classic"
+    mascot: bool = False  # put the studio's mascot inside the AI motion (needs a mascot)
 
 
 @router.post("/jobs", status_code=202)
@@ -146,6 +147,10 @@ def create_job(body: JobCreate, request: Request, actor: Actor = Depends(get_act
         if not d.allowed and d.reason in ("daily_limit", "monthly_cap"):
             raise AppError("budget_cap_reached", budget.cap_message(session, r.id, d.reason, d.est_cost_cents), 402)
     flags = {"demo": actor != "owner", "format": body.format}
+    if body.mascot:
+        if not r.mascot_asset_id:
+            raise AppError("no_mascot", "Create a mascot first (step 1).", 400)
+        flags["mascot_in_video"] = True
     stages, script_json = initial_stages(), None
     if body.storyboard is not None:
         script_json, stages = _director_script(session, body, menu_item_id, stages)
@@ -224,7 +229,8 @@ def retry_job(job_id: int, request: Request, actor: Actor = Depends(get_actor), 
 
     old = owned(session, Job, job_id, current_restaurant(session), "Job not found")
     ip = _admit(request, actor, session)
-    flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items() if k in ("not_on_menu", "continue_anyway", "format")}
+    flags = {k: v for k, v in (jload(old.flags_json, {}) or {}).items()
+             if k in ("not_on_menu", "continue_anyway", "format", "mascot_in_video")}
     flags["demo"] = actor != "owner"
     stages, script_json = initial_stages(), None
     old_flags = jload(old.flags_json, {}) or {}
@@ -305,7 +311,7 @@ def edit_and_rerender(job_id: int, body: ScriptEdit, request: Request, actor: Ac
         if st["name"] in ("analyze", "script"):
             st["status"] = "done"
             st["note"] = "Reused" if st["name"] == "analyze" else "Edited by you · grounding checked"
-    new_flags = {k: v for k, v in flags.items() if k in ("not_on_menu", "continue_anyway", "format", "director")}
+    new_flags = {k: v for k, v in flags.items() if k in ("not_on_menu", "continue_anyway", "format", "director", "mascot_in_video")}
     new_flags["demo"] = actor != "owner"
     # Re-use the AI clip the first render made: changing words shouldn't cost another AI video.
     src = int(flags.get("reuse_clip_of") or old.id)  # edits of edits point at the original AI clip

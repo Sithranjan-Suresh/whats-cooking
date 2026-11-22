@@ -145,7 +145,7 @@ function App({ signin }: { signin: "ok" | "rejected" | null }) {
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0 space-y-6">
               <StepLogo r={restaurant.data} onChange={() => restaurant.mutate()} signedIn={!!me.data?.account} googleReady={!!restaurant.data.youtube_configured} />
-              <StepDish onStarted={track} busy={busy} onPreview={setPreview} />
+              <StepDish onStarted={track} busy={busy} onPreview={setPreview} mascotUrl={restaurant.data.mascot_url ?? null} />
               <StepYouTube r={restaurant.data} ytConfigured={!!(restaurant.data.youtube_configured ?? health.data?.youtube_configured)} />
             </div>
             <div className={cx("lg:sticky lg:top-8 lg:order-none lg:self-start", jobId ? "order-first" : "order-last")}>
@@ -527,7 +527,18 @@ function MascotMaker({ r, onChange }: { r: Restaurant; onChange: () => void }) {
 
 // ---------------------------------------------------------------- 2. pick the dish
 
-function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => void; busy: boolean; onPreview: (url: string | null) => void }) {
+function StepDish({
+  onStarted,
+  busy,
+  onPreview,
+  mascotUrl,
+}: {
+  onStarted: (id: number) => void;
+  busy: boolean;
+  onPreview: (url: string | null) => void;
+  mascotUrl: string | null;
+}) {
+  const [withMascot, setWithMascot] = useState(true);
   const [source, setSource] = useState<"csv" | "photo">("photo");
   // Director mode: plan the Short in a chat before rendering
   const [mode, setMode] = useState<"quick" | "director">("quick");
@@ -615,7 +626,16 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
       const directing = mode === "director" && directed && storyboard;
       const menuItemId = directing ? directed!.id : await ensureDish();
       const r = await api<{ job_id: number }>("/jobs", {
-        json: { mode: "menu", menu_item_id: menuItemId, length_s: 8, style: "bold", veo, format, ...(directing ? { storyboard } : {}) },
+        json: {
+          mode: "menu",
+          menu_item_id: menuItemId,
+          length_s: 8,
+          style: "bold",
+          veo,
+          format,
+          mascot: !!mascotUrl && withMascot && veo,
+          ...(directing ? { storyboard } : {}),
+        },
       });
       onStarted(r.job_id);
       usage.mutate();
@@ -751,6 +771,25 @@ function StepDish({ onStarted, busy, onPreview }: { onStarted: (id: number) => v
         </div>
         {format !== "classic" && (
           <p className="mt-2 text-[11px] text-muted">The sound comes from AI motion (sizzle, crunch, pour). Free photo motion uses music instead.</p>
+        )}
+        {mascotUrl && (
+          <label className={cx("mt-3 flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition", withMascot && aiLeft !== 0 ? "border-gold/60 bg-gold/10" : "border-line")}>
+            <input
+              type="checkbox"
+              className="h-5 w-5 accent-[rgb(var(--gold))]"
+              checked={withMascot && aiLeft !== 0}
+              disabled={aiLeft === 0}
+              onChange={(e) => setWithMascot(e.target.checked)}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={mascotUrl} alt="" className="h-10 w-10 rounded-lg bg-[#f6efe4] object-contain p-0.5" />
+            <span className="text-sm">
+              <span className="font-semibold text-cream">Put my mascot in the video</span>
+              <span className="block text-xs text-muted">
+                {aiLeft === 0 ? "Needs AI motion, which is used up." : "It joins the dish in the AI motion (it can look a little different from your drawing)."}
+              </span>
+            </span>
+          </label>
         )}
       </div>
       <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg p-1 text-sm font-semibold" role="group" aria-label="How to make it">

@@ -45,6 +45,19 @@ FORMATS: dict[str, Format] = {
     ),
 }
 
+# When the restaurant's mascot is in the video (first frame = mascot placed beside the dish), what it does.
+MASCOT_ACTIONS = {
+    "money_shot": "the cartoon mascot dips its spoon into the dish, scoops a bite, tastes it, its eyes light up and it "
+                  "does a happy wiggle",
+    "chef_pov": "the cartoon mascot cheers the cook on, then gives an enthusiastic thumbs-up as the plate slides forward",
+    "classic": "the cartoon mascot waves at the camera, points excitedly at the dish, then does a little happy dance",
+}
+MASCOT_KEEP = (
+    "The cartoon mascot must keep EXACTLY the same design the whole time: same flat 2D cartoon style, colors, outlines "
+    "and face; it's a cartoon character living in a real photo (mixed media). The real food stays photorealistic and "
+    "unchanged. A cute cartoon 'mmm!' is fine; no human faces, no text."
+)
+
 DEFAULT = "classic"
 
 

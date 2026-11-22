@@ -180,6 +180,8 @@ class Ctx:
             self.logo_path = Path(logo.path) if logo else None
             mascot = s.get(Asset, r.mascot_asset_id) if getattr(r, "mascot_asset_id", None) else None
             self.mascot_path = Path(mascot.path) if mascot else None
+            # the mascot inside the AI motion itself (option on the job), not just on the ending
+            self.mascot_in_video = bool(self.flags.get("mascot_in_video") and self.mascot_path and self.mascot_path.exists())
             music = s.exec(select(Asset).where(Asset.restaurant_id == r.id, Asset.kind == "music")).first()
             if music is None:  # studios copied from the demo share its music track
                 from .db import template_restaurant
@@ -390,14 +392,29 @@ def clip_path(job_id: int) -> Path:
     return get_settings().media_dir / "clips" / f"job_{job_id}.mp4"
 
 
+def _motion_inputs(ctx: Ctx) -> tuple[Path, str, str]:
+    """(photo, mime, prompt) for AI motion: with the mascot in the video, its first frame has the mascot beside the dish."""
+    prompt = ctx.script.get("veo_prompt") or scripts.default_veo_prompt()
+    if not ctx.mascot_in_video:
+        return ctx.photo_path, ctx.photo_mime, prompt
+    try:
+        frame = render.mascot_first_frame(ctx.photo_path, ctx.mascot_path, ctx.work)
+    except Exception:  # noqa: BLE001  (never fail the video over the mascot)
+        log.exception("mascot first frame failed; animating the plain photo")
+        return ctx.photo_path, ctx.photo_mime, prompt
+    action = formats.MASCOT_ACTIONS.get(ctx.fmt.key, formats.MASCOT_ACTIONS["classic"])
+    return frame, "image/jpeg", f"{prompt} Meanwhile, {action}. {formats.MASCOT_KEEP}"
+
+
 async def _visuals(ctx: Ctx) -> Path:
     jid = ctx.job_id
     main_len = ctx.main_len
     fallback = None
+    motion_photo, motion_mime, motion_prompt = _motion_inputs(ctx)
     src = ctx.flags.get("reuse_clip_of")
     if src and await asyncio.to_thread(mediastore.restore, clip_path(int(src))):
         try:
-            out = await render.veo_plus_tail(clip_path(int(src)), ctx.photo_path, main_len, ctx.work, style=ctx.style)
+            out = await render.veo_plus_tail(clip_path(int(src)), motion_photo, main_len, ctx.work, style=ctx.style)
             _update_job(jid, veo_used=True, cost_cents=0)
             set_stage(jid, "visuals", "done", "AI motion (reused, no extra cost)")
             return out
@@ -418,8 +435,7 @@ async def _visuals(ctx: Ctx) -> Path:
                 clip = ctx.work / "veo.mp4"
                 try:
                     set_stage(jid, "visuals", "running", "Generating AI motion (about a minute)…")
-                    await veo.generate_clip(ctx.photo_path, ctx.photo_mime,
-                                            ctx.script.get("veo_prompt") or scripts.default_veo_prompt(), clip)
+                    await veo.generate_clip(motion_photo, motion_mime, motion_prompt, clip)
                 except veo.VeoError as e:
                     budget.release(jid)
                     fallback = veo.FALLBACK_REASONS.get(e.kind, "veo_error")
@@ -433,7 +449,7 @@ async def _visuals(ctx: Ctx) -> Path:
                     except OSError:
                         pass
                     try:
-                        out = await render.veo_plus_tail(clip, ctx.photo_path, main_len, ctx.work, style=ctx.style)
+                        out = await render.veo_plus_tail(clip, motion_photo, main_len, ctx.work, style=ctx.style)
                         set_stage(jid, "visuals", "done", "AI motion")
                         return out
                     except FFmpegError as e:
@@ -441,7 +457,7 @@ async def _visuals(ctx: Ctx) -> Path:
                         log.error("veo compose failed: %s", e.stderr_tail[-300:])
                         _update_job(jid, veo_used=False)
     try:
-        out = await render.kenburns(ctx.photo_path, main_len, ctx.work, style=ctx.style)
+        out = await render.kenburns(motion_photo, main_len, ctx.work, style=ctx.style)
     except FFmpegError as e:
         raise StageFailed("visuals", "Couldn't animate the photo. Retry.") from e
     note = "Free mode (Ken Burns)"
@@ -504,7 +520,7 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
     outro = ctx.restaurant["name"] + (f" · {dish}" if dish else "")
     # captions and the name line finish before the last moment blends back into the first (clean loop)
     end = ctx.main_len - render.LOOP_XFADE
-    has_mascot = bool(ctx.mascot_path and ctx.mascot_path.exists())
+    has_mascot = bool(ctx.mascot_path and ctx.mascot_path.exists()) and not ctx.mascot_in_video
     ass = render.build_ass(ctx.script, end, color_primary=ctx.restaurant["color_primary"],
                            color_accent=ctx.restaurant["color_accent"], style=ctx.fmt.caption_style, outro=outro,
                            beats_until=(ctx.main_len - render.MASCOT_MOMENT_S - 0.05) if has_mascot else None)
@@ -513,7 +529,8 @@ async def _assemble_loop(ctx: Ctx, visuals: Path) -> None:
     try:
         _, sound = await render.assemble_loop_with_retry(work=ctx.work, visuals=visuals, total=ctx.main_len, ass_text=ass,
                                               logo=ctx.logo_path, music=ctx.music_path,
-                                              ambient=ctx.work / "ambient.m4a", out_path=out, mascot=ctx.mascot_path)
+                                              ambient=ctx.work / "ambient.m4a", out_path=out,
+                                              mascot=None if ctx.mascot_in_video else ctx.mascot_path)
         poster = await render.extract_poster(out, media / "posters" / (out.stem + ".jpg"))
         info = await probe_video(out)
     except FFmpegError as e:

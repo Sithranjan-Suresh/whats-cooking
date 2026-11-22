@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from ..config import get_settings
 from .media import FFmpegError, ffmpeg, probe_video
@@ -564,6 +564,32 @@ def _paint_end_card(
                 frame.alpha_composite(m, (28 + (mascot.width - mw) // 2, H - 36 - mh + bob))
         frame.convert("RGB").save(frames_dir / f"f{i:04d}.jpg", quality=90)
     return frames_dir
+
+
+def mascot_first_frame(photo: Path, mascot: Path, work: Path) -> Path:
+    """The AI-motion first frame with the mascot in it: the dish photo cropped to 9:16 (720x1280) and the mascot
+    standing on the table in the lower-left with a soft contact shadow."""
+    img = load_photo(photo)
+    w, h = img.size
+    if w / h > 9 / 16:  # wider: centre crop
+        cw = int(h * 9 / 16)
+        img = img.crop(((w - cw) // 2, 0, (w - cw) // 2 + cw, h))
+    else:
+        ch = int(w * 16 / 9)
+        img = img.crop((0, (h - ch) // 2, w, (h - ch) // 2 + ch))
+    frame = img.resize((720, 1280), Image.LANCZOS).convert("RGBA")
+    m = _load_mascot(mascot, 430)
+    if m is None:
+        raise FileNotFoundError(mascot)
+    x, y = 24, 1280 - m.height - 110
+    shadow_mask = m.getchannel("A").point(lambda v: int(v * 0.45)).filter(ImageFilter.GaussianBlur(10))
+    shadow = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+    shadow.paste(Image.new("RGBA", m.size, (20, 10, 5, 255)), (x + 14, y + 18), shadow_mask)
+    frame = Image.alpha_composite(frame, shadow)
+    frame.alpha_composite(m, (x, y))
+    out = work / "mascot_frame.jpg"
+    frame.convert("RGB").save(out, quality=92)
+    return out
 
 
 def _load_mascot(path: Optional[Path], height: int) -> Optional[Image.Image]:
